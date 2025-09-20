@@ -1,26 +1,38 @@
 #include "MainWindow.h"
+#include "Glass.h"
 #include <QMenuBar>
 #include <QStatusBar>
 #include <QLabel>
+#include <QVBoxLayout>
+#include <QWidget>
+#include <QPalette>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
-    // Set window title and size
-    setWindowTitle("LiquidSSH");
-    resize(800, 600);
+    setWindowTitle("LiquidSSH - Qt6");
+    resize(1000, 700);
 
-    // Example menu
-    QMenu *fileMenu = menuBar()->addMenu("&File");
-    fileMenu->addAction("Exit", this, &QWidget::close);
+    // Central widget with transparent background so vibrancy is visible
+    auto *central = new QWidget(this);
+    central->setAttribute(Qt::WA_TranslucentBackground, true);
+    QPalette pal = central->palette();
+    pal.setColor(QPalette::Window, QColor(0,0,0,0));
+    central->setPalette(pal);
+    central->setAutoFillBackground(true);
 
-    // Example status bar
+    auto *layout = new QVBoxLayout(central);
+    auto *label = new QLabel("Liquid Glass active ✨", central);
+    label->setAlignment(Qt::AlignCenter);
+    layout->addWidget(label);
+    central->setLayout(layout);
+    setCentralWidget(central);
+
+    menuBar()->addMenu("&File")->addAction("Exit", this, &QWidget::close);
     statusBar()->showMessage("Ready");
 
-    // Example central widget
-    auto *label = new QLabel("Hello from Qt6 + C++23!", this);
-    label->setAlignment(Qt::AlignCenter);
-    setCentralWidget(label);
+    // Apply the glass effect
+    enableLiquidGlass(this);
 }
 
 MainWindow::~MainWindow() = default;

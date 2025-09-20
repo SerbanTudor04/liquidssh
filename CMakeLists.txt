@@ -20,6 +20,11 @@ add_executable(liquidssh
         src/main.cpp
         src/MainWindow.cpp
         src/MainWindow.h
+        src/Glass_stub.cpp
+        src/Glass_stub.cpp
+        src/Glass.cpp
+        src/Glass.h
+        src/Glass_win.cpp
         # forms/MainWindow.ui   # if you add a .ui later, just uncomment
         # resources.qrc         # same for a .qrc
 )
@@ -29,11 +34,12 @@ target_link_libraries(liquidssh PRIVATE Qt6::Widgets)
 target_include_directories(liquidssh PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 # --- Platform niceties
+# macOS: use Objective-C++ for the vibrancy implementation
 if(APPLE)
-    set_target_properties(liquidssh PROPERTIES
-            MACOSX_BUNDLE TRUE
-            MACOSX_BUNDLE_GUI_IDENTIFIER ro.serbantudor04.liquidssh
-    )
+    target_sources(liquidssh PRIVATE src/Glass_mac.mm)
+    set_source_files_properties(src/Glass_mac.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc")
+    target_link_libraries(liquidssh PRIVATE "-framework Cocoa" "-framework AppKit")
 elseif(WIN32)
-    set_target_properties(liquidssh PROPERTIES WIN32_EXECUTABLE TRUE)
+    target_sources(liquidssh PRIVATE src/Glass_win.cpp)
+    target_link_libraries(liquidssh PRIVATE Dwmapi)
 endif()
