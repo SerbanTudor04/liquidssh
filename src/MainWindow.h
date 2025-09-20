@@ -1,8 +1,11 @@
-//
-// Created by Serban Tudor Gabriel on 20.09.2025.
-//
+#pragma once
 
-#ifndef LIQUIDSSH_MAINWINDOW_H
-#define LIQUIDSSH_MAINWINDOW_H
+#include <QMainWindow>
 
-#endif //LIQUIDSSH_MAINWINDOW_H
+class MainWindow : public QMainWindow {
+    Q_OBJECT
+
+public:
+    explicit MainWindow(QWidget *parent = nullptr);
+    ~MainWindow() override;
+};
