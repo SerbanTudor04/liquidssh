@@ -17,12 +17,14 @@ MainWindow::MainWindow(QWidget *parent)
     auto *central = new QWidget(this);
     central->setAttribute(Qt::WA_TranslucentBackground, true);
     QPalette pal = central->palette();
-    pal.setColor(QPalette::Window, QColor(0,0,0,0));
+    pal.setColor(QPalette::Window, QColor(0,0,0,0)); // fully transparent
     central->setPalette(pal);
     central->setAutoFillBackground(true);
+    setCentralWidget(central);
+
 
     auto *layout = new QVBoxLayout(central);
-    auto *label = new QLabel("Liquid Glass active ✨", central);
+    auto *label = new QLabel("Liquid Glass active", central);
     label->setAlignment(Qt::AlignCenter);
     layout->addWidget(label);
     central->setLayout(layout);

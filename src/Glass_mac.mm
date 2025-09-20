@@ -3,21 +3,18 @@
 #include <QWindow>
 #include <QGuiApplication>
 
-#if QT_VERSION >= QT_VERSION_CHECK(6, 2, 0)
-#include <QtGui/qnativeinterface.h>   // public API for NSWindow access
-#endif
-
+// ---- helper ----
 static void addVibrancyToWindow(NSWindow* nsWindow) {
     if (!nsWindow) return;
 
-    // Make sure the window is allowed to be translucent
+    // allow translucency
     [nsWindow setOpaque:NO];
     nsWindow.backgroundColor = [NSColor clearColor];
 
     NSView* content = nsWindow.contentView;
     if (!content) return;
 
-    // Avoid duplicates
+    // avoid duplicates
     for (NSView* sub in content.subviews) {
         if ([sub isKindOfClass:[NSVisualEffectView class]]) {
             return;
@@ -30,35 +27,35 @@ static void addVibrancyToWindow(NSWindow* nsWindow) {
     blur.state = NSVisualEffectStateActive;
 
     if (@available(macOS 10.14, *)) {
-        blur.material = NSVisualEffectMaterialUnderWindowBackground;
+        blur.material = NSVisualEffectMaterialUnderWindowBackground; // semantic, not deprecated
     } else {
-        blur.material = NSVisualEffectMaterialMediumLight;
+        blur.material = NSVisualEffectMaterialLight; // older fallback
     }
 
-    // Insert below Qt’s content so desktop gets blurred behind
     [content addSubview:blur positioned:NSWindowBelow relativeTo:nil];
 
-    // Optional: seamless titlebar
+    // optional: minimal titlebar look
     nsWindow.titlebarAppearsTransparent = YES;
     nsWindow.titleVisibility = NSWindowTitleHidden;
 }
 
+// ---- API ----
 void enableLiquidGlass(QWidget* topLevel) {
     if (!topLevel) return;
 
-    // Qt side translucent
+    // Make Qt surface translucent so vibrancy shows through
     topLevel->setAttribute(Qt::WA_TranslucentBackground, true);
 
     QWindow* qwin = topLevel->windowHandle();
     if (!qwin) return;
 
-#if QT_VERSION >= QT_VERSION_CHECK(6, 2, 0)
-    auto iface = qwin->nativeInterface<QNativeInterface::QNSWindow>();
-    if (!iface) return;
-    NSWindow* nsWindow = iface->window();
-#else
-    // Very old Qt 6.x fallback (rare)
-    NSWindow* nsWindow = reinterpret_cast<NSWindow*>(qwin->winId());
-#endif
+    // Bridge WId -> void* -> NSView* (ARC-safe)
+    void* raw = reinterpret_cast<void*>(qwin->winId());
+    NSView* nsView = (__bridge NSView*)raw;
+    if (!nsView) return;
+
+    NSWindow* nsWindow = nsView.window;
+    if (!nsWindow) return;
+
     addVibrancyToWindow(nsWindow);
 }
