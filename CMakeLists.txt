@@ -21,6 +21,12 @@ add_executable(liquidssh
         src/MainWindow.cpp
         src/MainWindow.h
         src/Glass.h
+        src/Sidebar.cpp
+        src/Sidebar.h
+        src/InfoTab.cpp
+        src/InfoTab.h
+        src/TabArea.cpp
+        src/TabArea.h
 )
 
 # --- Platform-specific implementation

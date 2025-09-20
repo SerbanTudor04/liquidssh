@@ -3,57 +3,102 @@
 #include <QWindow>
 #include <QGuiApplication>
 
-static NSString *const kLiquidGlassViewID = @"com.tgssoftware.liquidssh.glass";
+static NSString *const kLiquidGlassViewID   = @"com.tgssoftware.liquidssh.glass";
+static NSString *const kLiquidDragViewID    = @"com.tgssoftware.liquidssh.drag";
 
-// Create/attach a single NSVisualEffectView that covers titlebar + content
-static void addVibrancyToWindow(NSWindow* nsWindow) {
+// A blur view that never intercepts mouse events
+@interface PassthroughVisualEffectView : NSVisualEffectView
+@end
+@implementation PassthroughVisualEffectView
+- (NSView *)hitTest:(NSPoint)point { return nil; } // pass all events through
+@end
+
+// A transparent view that *does* intercept clicks, purely to drag the window
+@interface DraggableTitlebarView : NSView
+@end
+@implementation DraggableTitlebarView
+- (BOOL)mouseDownCanMoveWindow { return YES; }
+@end
+
+// Compute the titlebar height (container is the superview of contentView)
+static CGFloat TitlebarHeight(NSWindow *win) {
+    if (!win || !win.contentView) return 0.0;
+    // In the container's coordinate space, contentView's Y origin equals titlebar height.
+    return win.contentView.frame.origin.y;
+}
+
+static void addVibrancyAndDrag(NSWindow* nsWindow) {
     if (!nsWindow) return;
 
-    // Allow translucency in the native window
+    // Allow translucency in the native window and extend content into titlebar
     [nsWindow setOpaque:NO];
     nsWindow.backgroundColor = [NSColor clearColor];
-
-    // Make content extend under the titlebar so glass is continuous
     nsWindow.titlebarAppearsTransparent = YES;
     nsWindow.titleVisibility = NSWindowTitleHidden;
     nsWindow.styleMask |= NSWindowStyleMaskFullSizeContentView;
-    nsWindow.movableByWindowBackground = YES;
+    nsWindow.movableByWindowBackground = NO; // we'll define a specific drag zone
 
-    // We want the blur BELOW all Qt content, including the titlebar controls.
-    // The superview of contentView is the "titlebar container" (includes titlebar area).
+    // Container covers titlebar + content area
     NSView *container = nsWindow.contentView.superview ?: nsWindow.contentView;
     if (!container) return;
 
-    // Avoid duplicates
+    // ---- Blur layer (behind everything) ----
+    BOOL hasBlur = NO;
     for (NSView *sub in container.subviews) {
         if ([sub isKindOfClass:[NSVisualEffectView class]] &&
             [sub.identifier isEqualToString:kLiquidGlassViewID]) {
-            return;
+            hasBlur = YES;
+            break;
         }
     }
+    if (!hasBlur) {
+        PassthroughVisualEffectView *blur =
+            [[PassthroughVisualEffectView alloc] initWithFrame:container.bounds];
+        blur.identifier = kLiquidGlassViewID;
+        blur.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+        blur.blendingMode = NSVisualEffectBlendingModeBehindWindow;
+        blur.state = NSVisualEffectStateActive;
 
-    // Size to the container (titlebar + content), and autoresize with it
-    NSVisualEffectView *blur = [[NSVisualEffectView alloc] initWithFrame:container.bounds];
-    blur.identifier = kLiquidGlassViewID;
-    blur.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
-    blur.ignoresMouseEvents = YES;
+        if (@available(macOS 10.14, *)) {
+            // Darker / more “see-through”
+            blur.material = NSVisualEffectMaterialHUDWindow;
+        } else {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+            blur.material = NSVisualEffectMaterialLight;
+#pragma clang diagnostic pop
+        }
 
-    // Make it a proper background blur
-    blur.blendingMode = NSVisualEffectBlendingModeBehindWindow;
-    blur.state = NSVisualEffectStateActive;
-
-    // Choose a material: HUDWindow is darker/more transparent.
-    // Alternatives: NSVisualEffectMaterialTitlebar (brighter),
-    //              NSVisualEffectMaterialSidebar (balanced),
-    //              NSVisualEffectMaterialUnderWindowBackground (subtle).
-    if (@available(macOS 10.14, *)) {
-        blur.material = NSVisualEffectMaterialHUDWindow;
-    } else {
-        blur.material = NSVisualEffectMaterialLight; // older fallback
+        [container addSubview:blur positioned:NSWindowBelow relativeTo:nil];
     }
 
-    // Insert at the back so all app content and traffic lights stay on top
-    [container addSubview:blur positioned:NSWindowBelow relativeTo:nil];
+    // ---- Draggable overlay only in the titlebar strip ----
+    // (Transparent view that tells AppKit "clicks here drag the window")
+    BOOL hasDragView = NO;
+    for (NSView *sub in container.subviews) {
+        if ([sub.identifier isEqualToString:kLiquidDragViewID]) {
+            hasDragView = YES;
+            break;
+        }
+    }
+    if (!hasDragView) {
+        CGFloat th = TitlebarHeight(nsWindow);
+        if (th > 0.0) {
+            NSRect frame = NSMakeRect(0,
+                                      container.bounds.size.height - th,
+                                      container.bounds.size.width,
+                                      th);
+            DraggableTitlebarView *dragView = [[DraggableTitlebarView alloc] initWithFrame:frame];
+            dragView.identifier = kLiquidDragViewID;
+            dragView.autoresizingMask = NSViewWidthSizable | NSViewMinYMargin;
+            dragView.wantsLayer = YES;
+            dragView.layer.backgroundColor = [NSColor clearColor].CGColor; // fully transparent
+
+            // Put it on top so it can receive clicks in empty titlebar areas,
+            // but note: native traffic-light buttons still sit above.
+            [container addSubview:dragView positioned:NSWindowAbove relativeTo:nil];
+        }
+    }
 }
 
 void enableLiquidGlass(QWidget* topLevel) {
@@ -73,5 +118,5 @@ void enableLiquidGlass(QWidget* topLevel) {
     NSWindow* nsWindow = nsView.window;
     if (!nsWindow) return;
 
-    addVibrancyToWindow(nsWindow);
+    addVibrancyAndDrag(nsWindow);
 }

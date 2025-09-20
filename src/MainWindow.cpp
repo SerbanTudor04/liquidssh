@@ -1,40 +1,56 @@
 #include "MainWindow.h"
 #include "Glass.h"
+#include "Sidebar.h"
+#include "TabArea.h"
+
+#include <QSplitter>
 #include <QMenuBar>
 #include <QStatusBar>
-#include <QLabel>
-#include <QVBoxLayout>
-#include <QWidget>
-#include <QPalette>
+#include <QMouseEvent>
+#include <QWindow>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
-    setWindowTitle("LiquidSSH - Qt6");
-    resize(1000, 700);
+    setWindowTitle("LiquidSSH");
+    resize(1200, 800);
 
-    // Central widget with transparent background so vibrancy is visible
-    auto *central = new QWidget(this);
-    central->setAttribute(Qt::WA_TranslucentBackground, true);
-    QPalette pal = central->palette();
-    pal.setColor(QPalette::Window, QColor(0,0,0,0));
-    central->setPalette(pal);
-    central->setAutoFillBackground(true);
-    setCentralWidget(central);
+    // Sidebar + tabs
+    auto *sidebar = new Sidebar(this);
+    auto *tabs    = new TabArea(this);
 
+    auto *splitter = new QSplitter(this);
+    splitter->addWidget(sidebar);
+    splitter->addWidget(tabs);
+    splitter->setStretchFactor(1, 1);
+    splitter->setAttribute(Qt::WA_TranslucentBackground, true);
+    splitter->setStyleSheet("background: transparent;");
+    setCentralWidget(splitter);
 
-    auto *layout = new QVBoxLayout(central);
-    auto *label = new QLabel("Liquid Glass active", central);
-    label->setAlignment(Qt::AlignCenter);
-    layout->addWidget(label);
-    central->setLayout(layout);
-    setCentralWidget(central);
-
+    // Menu & status bar
     menuBar()->addMenu("&File")->addAction("Exit", this, &QWidget::close);
     statusBar()->showMessage("Ready");
 
-    // Apply the glass effect
+    // Connect sidebar to tabs
+    connect(sidebar, &Sidebar::hostSelected,
+            tabs,    &TabArea::setHostInfo);
+    connect(sidebar, &Sidebar::hostDoubleClicked, tabs, &TabArea::openHostTab);
+
+
+
+    // Apply glass (macOS only)
     enableLiquidGlass(this);
 }
 
 MainWindow::~MainWindow() = default;
+
+void MainWindow::mousePressEvent(QMouseEvent *event) {
+    if (event->button() == Qt::LeftButton) {
+        if (QWindow *win = windowHandle()) {
+            win->startSystemMove();
+            event->accept();
+            return;
+        }
+    }
+    QMainWindow::mousePressEvent(event);
+}
