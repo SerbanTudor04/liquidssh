@@ -17,7 +17,7 @@ MainWindow::MainWindow(QWidget *parent)
     auto *central = new QWidget(this);
     central->setAttribute(Qt::WA_TranslucentBackground, true);
     QPalette pal = central->palette();
-    pal.setColor(QPalette::Window, QColor(0,0,0,0)); // fully transparent
+    pal.setColor(QPalette::Window, QColor(0,0,0,0));
     central->setPalette(pal);
     central->setAutoFillBackground(true);
     setCentralWidget(central);

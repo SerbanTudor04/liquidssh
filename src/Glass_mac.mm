@@ -3,47 +3,63 @@
 #include <QWindow>
 #include <QGuiApplication>
 
-// ---- helper ----
+static NSString *const kLiquidGlassViewID = @"com.tgssoftware.liquidssh.glass";
+
+// Create/attach a single NSVisualEffectView that covers titlebar + content
 static void addVibrancyToWindow(NSWindow* nsWindow) {
     if (!nsWindow) return;
 
-    // allow translucency
+    // Allow translucency in the native window
     [nsWindow setOpaque:NO];
     nsWindow.backgroundColor = [NSColor clearColor];
 
-    NSView* content = nsWindow.contentView;
-    if (!content) return;
+    // Make content extend under the titlebar so glass is continuous
+    nsWindow.titlebarAppearsTransparent = YES;
+    nsWindow.titleVisibility = NSWindowTitleHidden;
+    nsWindow.styleMask |= NSWindowStyleMaskFullSizeContentView;
+    nsWindow.movableByWindowBackground = YES;
 
-    // avoid duplicates
-    for (NSView* sub in content.subviews) {
-        if ([sub isKindOfClass:[NSVisualEffectView class]]) {
+    // We want the blur BELOW all Qt content, including the titlebar controls.
+    // The superview of contentView is the "titlebar container" (includes titlebar area).
+    NSView *container = nsWindow.contentView.superview ?: nsWindow.contentView;
+    if (!container) return;
+
+    // Avoid duplicates
+    for (NSView *sub in container.subviews) {
+        if ([sub isKindOfClass:[NSVisualEffectView class]] &&
+            [sub.identifier isEqualToString:kLiquidGlassViewID]) {
             return;
         }
     }
 
-    NSVisualEffectView* blur = [[NSVisualEffectView alloc] initWithFrame:content.bounds];
+    // Size to the container (titlebar + content), and autoresize with it
+    NSVisualEffectView *blur = [[NSVisualEffectView alloc] initWithFrame:container.bounds];
+    blur.identifier = kLiquidGlassViewID;
     blur.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+    blur.ignoresMouseEvents = YES;
+
+    // Make it a proper background blur
     blur.blendingMode = NSVisualEffectBlendingModeBehindWindow;
     blur.state = NSVisualEffectStateActive;
 
+    // Choose a material: HUDWindow is darker/more transparent.
+    // Alternatives: NSVisualEffectMaterialTitlebar (brighter),
+    //              NSVisualEffectMaterialSidebar (balanced),
+    //              NSVisualEffectMaterialUnderWindowBackground (subtle).
     if (@available(macOS 10.14, *)) {
-        blur.material = NSVisualEffectMaterialUnderWindowBackground; // semantic, not deprecated
+        blur.material = NSVisualEffectMaterialHUDWindow;
     } else {
         blur.material = NSVisualEffectMaterialLight; // older fallback
     }
 
-    [content addSubview:blur positioned:NSWindowBelow relativeTo:nil];
-
-    // optional: minimal titlebar look
-    nsWindow.titlebarAppearsTransparent = YES;
-    nsWindow.titleVisibility = NSWindowTitleHidden;
+    // Insert at the back so all app content and traffic lights stay on top
+    [container addSubview:blur positioned:NSWindowBelow relativeTo:nil];
 }
 
-// ---- API ----
 void enableLiquidGlass(QWidget* topLevel) {
     if (!topLevel) return;
 
-    // Make Qt surface translucent so vibrancy shows through
+    // Let Qt paint with translucency so the macOS blur shows through
     topLevel->setAttribute(Qt::WA_TranslucentBackground, true);
 
     QWindow* qwin = topLevel->windowHandle();
