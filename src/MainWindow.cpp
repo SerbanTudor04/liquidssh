@@ -8,6 +8,7 @@
 #include <QStatusBar>
 #include <QMouseEvent>
 #include <QWindow>
+#include <QTimer>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -15,34 +16,56 @@ MainWindow::MainWindow(QWidget *parent)
     setWindowTitle("LiquidSSH");
     resize(1200, 800);
 
-    auto *sidebar = new Sidebar(this);
-    auto *tabs    = new TabArea(this);
+#ifdef Q_OS_MAC
+    // Let the OS blur show through the window itself
+    setAttribute(Qt::WA_TranslucentBackground, true);
+    setStyleSheet("QMainWindow { background: transparent; }");
+#endif
 
+    // Sidebar + tabs
+    auto *sidebar = new Sidebar(this);   // <-- make sure Sidebar.cpp sets widget + viewport transparent
+    auto *tabs    = new TabArea(this);   // <-- TabArea.cpp should make QTabWidget::pane transparent
+
+    // Central splitter (single stylesheet call; previous multiple calls were overwriting)
     auto *splitter = new QSplitter(this);
     splitter->addWidget(sidebar);
     splitter->addWidget(tabs);
     splitter->setStretchFactor(1, 1);
+    splitter->setHandleWidth(2);
     splitter->setAttribute(Qt::WA_TranslucentBackground, true);
-    splitter->setStyleSheet("background: transparent;");
-    setCentralWidget(splitter);
+    splitter->setStyleSheet(R"(
+        QSplitter { background: transparent; }
+        QSplitter::handle { background: rgba(255,255,255,0.08); border: none; }
+    )");
 
-    // Connect with UniqueConnection to prevent accidental duplicates
+    setCentralWidget(splitter);
+    setContentsMargins(0,0,0,0);
+
+    // Menu & status
+    menuBar()->addMenu("&File")->addAction("Exit", this, &QWidget::close);
+    // statusBar()->showMessage("Ready");
+
+    // Signals (guard against accidental dupes)
     connect(sidebar, &Sidebar::hostSelected,
             tabs,    &TabArea::setHostInfo,
             Qt::UniqueConnection);
-
     connect(sidebar, &Sidebar::hostDoubleClicked,
             tabs,    &TabArea::openHostTab,
             Qt::UniqueConnection);
 
-
-    // Apply glass (macOS only)
-    enableLiquidGlass(this);
+    // Install the vibrancy AFTER the window is realized to avoid timing issues
+#ifdef Q_OS_MAC
+    QTimer::singleShot(0, this, [this]{
+        enableLiquidGlass(this);
+    });
+#endif
 }
 
 MainWindow::~MainWindow() = default;
 
 void MainWindow::mousePressEvent(QMouseEvent *event) {
+#ifdef Q_OS_MAC
+    // Drag the window from any empty area (reliable cross-platform)
     if (event->button() == Qt::LeftButton) {
         if (QWindow *win = windowHandle()) {
             win->startSystemMove();
@@ -50,5 +73,6 @@ void MainWindow::mousePressEvent(QMouseEvent *event) {
             return;
         }
     }
+#endif
     QMainWindow::mousePressEvent(event);
 }

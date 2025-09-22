@@ -25,12 +25,20 @@ TabArea::TabArea(QWidget *parent) : QWidget(parent) {
     lay->addWidget(tabs);
     setLayout(lay);
 
-    // Optional styling so blur shows through
     setAttribute(Qt::WA_TranslucentBackground, true);
+
     tabs->setStyleSheet(R"(
-        QTabWidget::pane { background: transparent; border: 1px solid rgba(255,255,255,0.15); }
-        QTabBar::tab { padding: 6px 10px; margin: 2px; }
-    )");
+  QTabWidget::pane { background: transparent; border: none; }
+  QTabBar { background: transparent; }
+  QTabBar::tab {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-bottom: none;
+    border-top-left-radius: 6px; border-top-right-radius: 6px;
+    padding: 6px 10px; margin: 0 4px;
+  }
+  QTabBar::tab:selected { background: rgba(255,255,255,0.18); }
+)");
 }
 
 int TabArea::findTabByText(const QString &text) const {

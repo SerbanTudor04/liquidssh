@@ -17,18 +17,18 @@ Sidebar::Sidebar(QWidget *parent) : QWidget(parent) {
     layout->setContentsMargins(8,8,8,8);
     layout->addWidget(list);
     setLayout(layout);
-
     setAttribute(Qt::WA_TranslucentBackground, true);
+    setStyleSheet("background: transparent;");
+
+    // For the list itself (viewport background is the key)
+    list->setAttribute(Qt::WA_TranslucentBackground, true);
+    list->viewport()->setAttribute(Qt::WA_TranslucentBackground, true);
     list->setStyleSheet(R"(
-        QListWidget { background: transparent; border: none; }
-        QListWidget::item {
-            background: transparent;
-            border-radius: 18px;
-            margin: 6px; padding: 10px 14px; color: white;
-        }
-        QListWidget::item:hover   { background: rgba(255,255,255,0.12); }
-        QListWidget::item:selected{ background: rgba(255,255,255,0.35); color: black; }
-    )");
+  QListWidget { background: transparent; border: none; }
+  QListWidget::item { background: transparent; border-radius: 18px; margin: 6px; padding: 10px 14px; color: white; }
+  QListWidget::item:hover   { background: rgba(255,255,255,0.12); }
+  QListWidget::item:selected{ background: rgba(255,255,255,0.35); color: black; }
+)");
 
     // Single click → enforce one selection and emit hostSelected
     connect(list, &QListWidget::itemClicked, this, [this](QListWidgetItem *it){
