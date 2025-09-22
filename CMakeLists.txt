@@ -27,6 +27,8 @@ add_executable(liquidssh
         src/InfoTab.h
         src/TabArea.cpp
         src/TabArea.h
+        src/TerminalTab.cpp
+        src/TerminalTab.h
 )
 
 # --- Platform-specific implementation

@@ -2,22 +2,24 @@
 #include <QTextEdit>
 #include <QVBoxLayout>
 
-InfoTab::InfoTab(QWidget *parent)
-    : QWidget(parent)
-{
+InfoTab::InfoTab(QWidget *parent) : QWidget(parent) {
     text = new QTextEdit(this);
     text->setReadOnly(true);
-    text->setText("Select a host from the sidebar...");
-    auto *layout = new QVBoxLayout(this);
-    layout->addWidget(text);
-    setLayout(layout);
+    text->setPlainText("Select a host from the sidebar...");
+    auto *lay = new QVBoxLayout(this);
+    lay->addWidget(text);
+    setLayout(lay);
 }
 
 void InfoTab::showHostInfo(const QString &host) {
-    text->setPlainText(QString("Information about host:\n\n%1\n\n"
-                               "Status: Online\nUser: root\nLast seen: now")
-                               .arg(host));
+    text->clear();
+    text->setPlainText(QString(
+        "Information about host:\n\n"
+        "%1\n\n"
+        "Status: Online\n"
+        "User: root\n"
+        "Last seen: now"
+    ).arg(host));
 }
-
 
 

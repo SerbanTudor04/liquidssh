@@ -15,7 +15,6 @@ MainWindow::MainWindow(QWidget *parent)
     setWindowTitle("LiquidSSH");
     resize(1200, 800);
 
-    // Sidebar + tabs
     auto *sidebar = new Sidebar(this);
     auto *tabs    = new TabArea(this);
 
@@ -27,15 +26,14 @@ MainWindow::MainWindow(QWidget *parent)
     splitter->setStyleSheet("background: transparent;");
     setCentralWidget(splitter);
 
-    // Menu & status bar
-    menuBar()->addMenu("&File")->addAction("Exit", this, &QWidget::close);
-    statusBar()->showMessage("Ready");
-
-    // Connect sidebar to tabs
+    // Connect with UniqueConnection to prevent accidental duplicates
     connect(sidebar, &Sidebar::hostSelected,
-            tabs,    &TabArea::setHostInfo);
-    connect(sidebar, &Sidebar::hostDoubleClicked, tabs, &TabArea::openHostTab);
+            tabs,    &TabArea::setHostInfo,
+            Qt::UniqueConnection);
 
+    connect(sidebar, &Sidebar::hostDoubleClicked,
+            tabs,    &TabArea::openHostTab,
+            Qt::UniqueConnection);
 
 
     // Apply glass (macOS only)

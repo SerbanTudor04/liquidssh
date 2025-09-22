@@ -1,50 +1,45 @@
 #include "Sidebar.h"
 #include <QListWidget>
 #include <QVBoxLayout>
-
-Sidebar::Sidebar(QWidget *parent)
-    : QWidget(parent)
-{
+#include <QItemSelectionModel>
+Sidebar::Sidebar(QWidget *parent) : QWidget(parent) {
     list = new QListWidget(this);
     list->addItem("prod-db (10.0.0.5)");
     list->addItem("edge-01 (edge01.example.com)");
     list->addItem("dev-mac (192.168.1.23)");
 
-    // Only one item at a time
     list->setSelectionMode(QAbstractItemView::SingleSelection);
+    list->setSelectionBehavior(QAbstractItemView::SelectItems);
+    list->setSelectionRectVisible(false);
+    list->setFocusPolicy(Qt::NoFocus);
 
     auto *layout = new QVBoxLayout(this);
+    layout->setContentsMargins(8,8,8,8);
     layout->addWidget(list);
     setLayout(layout);
 
     setAttribute(Qt::WA_TranslucentBackground, true);
-
-    // Rounded “island” look
     list->setStyleSheet(R"(
-        QListWidget {
-            background: transparent;
-            border: none;
-        }
+        QListWidget { background: transparent; border: none; }
         QListWidget::item {
-            background: rgba(255,255,255,40);
-            border-radius: 20px;
-            margin: 6px;
-            padding: 8px 12px;
-            color: white;
+            background: transparent;
+            border-radius: 18px;
+            margin: 6px; padding: 10px 14px; color: white;
         }
-        QListWidget::item:selected {
-            background: rgba(255,255,255,100);
-            color: black;
-        }
+        QListWidget::item:hover   { background: rgba(255,255,255,0.12); }
+        QListWidget::item:selected{ background: rgba(255,255,255,0.35); color: black; }
     )");
 
-    connect(list, &QListWidget::itemSelectionChanged, [this]() {
-        if (!list->selectedItems().isEmpty()) {
-            emit hostSelected(list->selectedItems().first()->text());
-        }
+    // Single click → enforce one selection and emit hostSelected
+    connect(list, &QListWidget::itemClicked, this, [this](QListWidgetItem *it){
+        list->clearSelection();
+        it->setSelected(true);
+        list->setCurrentItem(it);
+        emit hostSelected(it->text());
     });
 
-    connect(list, &QListWidget::itemDoubleClicked, [this](QListWidgetItem *item) {
-        emit hostDoubleClicked(item->text());
+    // Double click → open session tab
+    connect(list, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem *it){
+        emit hostDoubleClicked(it->text());
     });
 }

@@ -1,6 +1,5 @@
 #pragma once
 #include <QWidget>
-
 class QTextEdit;
 
 class InfoTab : public QWidget {
@@ -8,7 +7,6 @@ class InfoTab : public QWidget {
 public:
     explicit InfoTab(QWidget *parent = nullptr);
     void showHostInfo(const QString &host);
-
 private:
     QTextEdit *text;
 };
