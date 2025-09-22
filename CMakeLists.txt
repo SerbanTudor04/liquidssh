@@ -29,6 +29,10 @@ add_executable(liquidssh
         src/TabArea.h
         src/TerminalTab.cpp
         src/TerminalTab.h
+        src/CustomTabBar.cpp
+        src/CustomTabBar.h
+        src/CustomTabWidget.cpp
+        src/CustomTabWidget.h
 )
 
 # --- Platform-specific implementation

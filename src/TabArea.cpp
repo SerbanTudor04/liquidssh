@@ -1,67 +1,106 @@
 #include "TabArea.h"
 #include "InfoTab.h"
 #include "TerminalTab.h"
+#include "CustomTabBar.h"
 
 #include <QTabWidget>
 #include <QTabBar>
 #include <QVBoxLayout>
+#include <QPainter>
+
+#include "CustomTabWidget.h"
+
+// icon helper from section 2
+static QIcon makeStatusIcon(const QColor &c, int d = 12);
 
 TabArea::TabArea(QWidget *parent) : QWidget(parent) {
-    tabs = new QTabWidget(this);
+    setAttribute(Qt::WA_TranslucentBackground, true);
+
+    tabs = new CustomTabWidget(this);   // << was new QTabWidget(...)
+    tabs->setAttribute(Qt::WA_TranslucentBackground, true);
+
+    // Behavior
     tabs->setMovable(true);
     tabs->setTabsClosable(true);
-    tabs->setDocumentMode(true);
+    tabs->setDocumentMode(false);
     tabs->setElideMode(Qt::ElideRight);
     tabs->setTabBarAutoHide(false);
+    tabs->setIconSize(QSize(12,12));
 
+    // Stylesheet (unchanged)
+    tabs->setStyleSheet(R"(
+      QTabWidget::pane { background: transparent; border: 1px solid rgba(255,255,255,0.10); border-top: none; }
+      QTabBar { background: transparent; qproperty-drawBase: 0; }
+      QTabBar::tab {
+        color: #ECECEC;
+        background: rgba(255,255,255,0.10);
+        border: 1px solid rgba(255,255,255,0.22);
+        border-radius: 16px;
+        padding: 6px 12px;
+        margin: 6px 6px 0 6px;
+      }
+      QTabBar::tab:selected {
+        background: rgba(255,255,255,0.22);
+        border: 1px solid rgba(255,255,255,0.32);
+        margin-top: 5px;
+      }
+      QTabBar::tab:hover { background: rgba(255,255,255,0.16); }
+      QTabBar::close-button { subcontrol-position: right; margin-left: 6px; }
+    )");
+
+    // Tabs
     info = new InfoTab(this);
-    int infoIndex = tabs->addTab(info, "Info");
-
-    // Make "Info" not closable
+    int infoIndex = tabs->addTab(info, makeStatusIcon(QColor(130,180,255,230)), "Info");
     tabs->tabBar()->setTabButton(infoIndex, QTabBar::RightSide, nullptr);
 
     auto *lay = new QVBoxLayout(this);
     lay->setContentsMargins(0,0,0,0);
     lay->addWidget(tabs);
     setLayout(lay);
-
-    setAttribute(Qt::WA_TranslucentBackground, true);
-
-    tabs->setStyleSheet(R"(
-  QTabWidget::pane { background: transparent; border: none; }
-  QTabBar { background: transparent; }
-  QTabBar::tab {
-    background: rgba(255,255,255,0.08);
-    border: 1px solid rgba(255,255,255,0.12);
-    border-bottom: none;
-    border-top-left-radius: 6px; border-top-right-radius: 6px;
-    padding: 6px 10px; margin: 0 4px;
-  }
-  QTabBar::tab:selected { background: rgba(255,255,255,0.18); }
-)");
 }
 
 int TabArea::findTabByText(const QString &text) const {
-    for (int i = 0; i < tabs->count(); ++i) {
+    for (int i = 0; i < tabs->count(); ++i)
         if (tabs->tabText(i) == text) return i;
-    }
     return -1;
 }
 
 void TabArea::setHostInfo(const QString &host) {
-    info->showHostInfo(host);           // replace content
-    tabs->setCurrentIndex(0);           // focus Info tab
+    info->showHostInfo(host);
+    tabs->setCurrentIndex(0);
 }
 
 void TabArea::openHostTab(const QString &host) {
-    // Avoid duplicates: if a tab with same title exists, just activate it
     int idx = findTabByText(host);
-    if (idx >= 0) {
-        tabs->setCurrentIndex(idx);
-        return;
-    }
+    if (idx >= 0) { tabs->setCurrentIndex(idx); return; }
 
     auto *term = new TerminalTab(host, this);
-    int newIndex = tabs->addTab(term, host);
+    int newIndex = tabs->addTab(term, makeStatusIcon(QColor(120,200,255,230)), host);
     tabs->setCurrentIndex(newIndex);
+}
+
+// --- icon helper impl ---
+static QIcon makeStatusIcon(const QColor &c, int d) {
+    QPixmap px(d, d); px.fill(Qt::transparent);
+    QPainter p(&px); p.setRenderHint(QPainter::Antialiasing, true);
+
+    // soft shadow
+    p.setBrush(QColor(0,0,0,50)); p.setPen(Qt::NoPen);
+    p.drawEllipse(QRectF(1,1,d-2,d-2));
+
+    // main fill
+    p.setBrush(c); p.drawEllipse(QRectF(0,0,d-2,d-2));
+
+    // rim
+    p.setPen(QPen(QColor(255,255,255,140), 1));
+    p.setBrush(Qt::NoBrush);
+    p.drawEllipse(QRectF(0.5,0.5,d-3,d-3));
+
+    // specular highlight
+    QRadialGradient g(QPointF(d*0.35, d*0.35), d*0.6);
+    g.setColorAt(0.0, QColor(255,255,255,180));
+    g.setColorAt(1.0, QColor(255,255,255,0));
+    p.setBrush(g); p.setPen(Qt::NoPen);
+    p.drawEllipse(QRectF(1,1,d-4,d-4));
+    return QIcon(px);
 }

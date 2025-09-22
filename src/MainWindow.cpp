@@ -5,7 +5,7 @@
 
 #include <QSplitter>
 #include <QMenuBar>
-#include <QStatusBar>
+
 #include <QMouseEvent>
 #include <QWindow>
 #include <QTimer>
