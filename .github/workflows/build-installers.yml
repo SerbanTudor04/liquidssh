@@ -61,7 +61,7 @@ jobs:
       # ---------- NEW: deps for Windows via vcpkg ----------
       - name: Set up vcpkg (Windows)
         if: runner.os == 'Windows'
-        uses: microsoft/vcpkg-action@v1
+        uses: lukka/run-vcpkg@v11
         with:
           # Pin to a stable commit for reproducibility (sample hash; you can update later)
           vcpkgGitCommitId: 8b9d2a7f8e1a1d3b6820a86d6a0f0e6a3d3a6b65
