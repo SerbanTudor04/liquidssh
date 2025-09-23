@@ -63,12 +63,12 @@ endif()
 # ---------------- macOS bundle niceties ----------------
 if(APPLE)
     # App identity & version for Info.plist
-    set(LIQUIDSSH_BUNDLE_ID "com.tgssoftware.liquidssh")
-    set(LIQUIDSSH_VERSION   "0.0.0")
-    set(LIQUIDSSH_SHORTVER  "0.0.0")
+    set(LIQUIDSSH_BUNDLE_ID "ro.serbantudor04.liquidssh")
+    set(LIQUIDSSH_VERSION   "0.0.1")
+    set(LIQUIDSSH_SHORTVER  "0.0.1")
 
     # Icon
-    set(MACOSX_BUNDLE_ICON_FILE "LiquidSSH.icns")
+    set(MACOSX_BUNDLE_ICON_FILE "LiquidSSH")
     set_source_files_properties(resources/icons/LiquidSSH.icns PROPERTIES
             MACOSX_PACKAGE_LOCATION "Resources")
     target_sources(liquidssh PRIVATE resources/icons/LiquidSSH.icns)
