@@ -26,30 +26,29 @@ static CGFloat TitlebarHeight(NSWindow *win) {
     // In the container's coordinate space, contentView's Y origin equals titlebar height.
     return win.contentView.frame.origin.y;
 }
-
 static void addVibrancyAndDrag(NSWindow* nsWindow) {
     if (!nsWindow) return;
 
-    // Allow translucency in the native window and extend content into titlebar
     [nsWindow setOpaque:NO];
     nsWindow.backgroundColor = [NSColor clearColor];
     nsWindow.titlebarAppearsTransparent = YES;
     nsWindow.titleVisibility = NSWindowTitleHidden;
     nsWindow.styleMask |= NSWindowStyleMaskFullSizeContentView;
-    nsWindow.movableByWindowBackground = NO; // we'll define a specific drag zone
+    nsWindow.movableByWindowBackground = NO;
 
-    // Container covers titlebar + content area
-    NSView *container = nsWindow.contentView.superview ?: nsWindow.contentView;
+    NSView *content  = nsWindow.contentView;
+    if (!content) return;
+
+    // IMPORTANT: add blur/drag to the *container* (superview of contentView),
+    // and put the blur BELOW the contentView so Qt paints above it.
+    NSView *container = content.superview;
     if (!container) return;
 
-    // ---- Blur layer (behind everything) ----
+    // ---- Blur behind content ----
     BOOL hasBlur = NO;
     for (NSView *sub in container.subviews) {
         if ([sub isKindOfClass:[NSVisualEffectView class]] &&
-            [sub.identifier isEqualToString:kLiquidGlassViewID]) {
-            hasBlur = YES;
-            break;
-        }
+            [sub.identifier isEqualToString:kLiquidGlassViewID]) { hasBlur = YES; break; }
     }
     if (!hasBlur) {
         PassthroughVisualEffectView *blur =
@@ -58,10 +57,8 @@ static void addVibrancyAndDrag(NSWindow* nsWindow) {
         blur.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
         blur.blendingMode = NSVisualEffectBlendingModeBehindWindow;
         blur.state = NSVisualEffectStateActive;
-
         if (@available(macOS 10.14, *)) {
-            // Darker / more “see-through”
-            blur.material = NSVisualEffectMaterialHUDWindow;
+            blur.material = NSVisualEffectMaterialUnderWindowBackground;
         } else {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
@@ -69,17 +66,14 @@ static void addVibrancyAndDrag(NSWindow* nsWindow) {
 #pragma clang diagnostic pop
         }
 
-        [container addSubview:blur positioned:NSWindowBelow relativeTo:nil];
+        // Put blur BELOW the Qt contentView
+        [container addSubview:blur positioned:NSWindowBelow relativeTo:content];
     }
 
-    // ---- Draggable overlay only in the titlebar strip ----
-    // (Transparent view that tells AppKit "clicks here drag the window")
+    // ---- Draggable overlay in titlebar strip (on container, above content) ----
     BOOL hasDragView = NO;
     for (NSView *sub in container.subviews) {
-        if ([sub.identifier isEqualToString:kLiquidDragViewID]) {
-            hasDragView = YES;
-            break;
-        }
+        if ([sub.identifier isEqualToString:kLiquidDragViewID]) { hasDragView = YES; break; }
     }
     if (!hasDragView) {
         CGFloat th = TitlebarHeight(nsWindow);
@@ -92,31 +86,34 @@ static void addVibrancyAndDrag(NSWindow* nsWindow) {
             dragView.identifier = kLiquidDragViewID;
             dragView.autoresizingMask = NSViewWidthSizable | NSViewMinYMargin;
             dragView.wantsLayer = YES;
-            dragView.layer.backgroundColor = [NSColor clearColor].CGColor; // fully transparent
+            dragView.layer.backgroundColor = [NSColor clearColor].CGColor;
 
-            // Put it on top so it can receive clicks in empty titlebar areas,
-            // but note: native traffic-light buttons still sit above.
-            [container addSubview:dragView positioned:NSWindowAbove relativeTo:nil];
+            [container addSubview:dragView positioned:NSWindowAbove relativeTo:content];
         }
     }
 }
 
+
 void enableLiquidGlass(QWidget* topLevel) {
     if (!topLevel) return;
 
-    // Let Qt paint with translucency so the macOS blur shows through
+    // Let Qt paint with translucency
     topLevel->setAttribute(Qt::WA_TranslucentBackground, true);
 
     QWindow* qwin = topLevel->windowHandle();
+    if (!qwin && topLevel->nativeParentWidget())
+        qwin = topLevel->nativeParentWidget()->windowHandle();
     if (!qwin) return;
 
-    // Bridge WId -> void* -> NSView* (ARC-safe)
-    void* raw = reinterpret_cast<void*>(qwin->winId());
-    NSView* nsView = (__bridge NSView*)raw;
+    // On macOS, Qt's WId is the NSView*
+    WId wid = qwin->winId();
+    if (!wid) return;
+
+    NSView* nsView = (__bridge NSView*)(void*)wid;
     if (!nsView) return;
 
     NSWindow* nsWindow = nsView.window;
     if (!nsWindow) return;
 
-    addVibrancyAndDrag(nsWindow);
+    addVibrancyAndDrag(nsWindow);   // your function
 }

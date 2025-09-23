@@ -2,14 +2,33 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
   <dict>
-    <key>CFBundleName</key><string>LiquidSSH</string>
-    <key>CFBundleDisplayName</key><string>LiquidSSH</string>
-    <key>CFBundleIdentifier</key><string>@BUNDLE_ID@</string>
-    <key>CFBundleVersion</key><string>@BUNDLE_VER@</string>
-    <key>CFBundleShortVersionString</key><string>@BUNDLE_SHORTVER@</string>
-    <key>LSMinimumSystemVersion</key><string>${CMAKE_OSX_DEPLOYMENT_TARGET}</string>
-    <key>CFBundleIconFile</key><string>${MACOSX_BUNDLE_ICON_FILE}</string>
-    <key>NSHighResolutionCapable</key><true/>
-    <key>NSRequiresAquaSystemAppearance</key><true/>
+    <key>CFBundleName</key>                <string>LiquidSSH</string>
+    <key>CFBundleDisplayName</key>         <string>LiquidSSH</string>
+    <key>CFBundleIdentifier</key>          <string>@LIQUIDSSH_BUNDLE_ID@</string>
+    <key>CFBundleVersion</key>             <string>@LIQUIDSSH_VERSION@</string>
+    <key>CFBundleShortVersionString</key>  <string>@LIQUIDSSH_SHORTVER@</string>
+
+    <key>LSMinimumSystemVersion</key>      <string>@CMAKE_OSX_DEPLOYMENT_TARGET@</string>
+
+    <!-- App icon: name *without* .icns -->
+    <key>CFBundleIconFile</key>            <string>@MACOSX_BUNDLE_ICON_FILE@</string>
+
+    <!-- Optional, but fine to keep -->
+    <key>CFBundleIcons</key>
+    <dict>
+      <key>CFBundlePrimaryIcon</key>
+      <dict>
+        <key>CFBundleIconFiles</key>
+        <array>
+          <string>@MACOSX_BUNDLE_ICON_FILE@</string>
+        </array>
+      </dict>
+    </dict>
+
+    <!-- Common GUI keys -->
+    <key>CFBundlePackageType</key>         <string>APPL</string>
+    <key>NSPrincipalClass</key>            <string>NSApplication</string>
+    <key>NSHighResolutionCapable</key>     <true/>
+    <key>NSRequiresAquaSystemAppearance</key><false/>
   </dict>
 </plist>
