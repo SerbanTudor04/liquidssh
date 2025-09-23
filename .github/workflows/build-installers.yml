@@ -7,23 +7,19 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Override version (defaults to tag or 0.0.0)"
+        description: "Override version (defaults to tag sans 'v' or 0.0.0-dev)"
         required: false
         default: ""
 
-env:
-  # If you tag like v1.2.3, this extracts 1.2.3; otherwise uses input or 0.0.0
-  VERSION: ${{ github.ref_type == 'tag' && startsWith(github.ref_name, 'v') && github.ref_name != '' && join(fromJSON('["'']'), '') || (inputs.version != '' && inputs.version || '0.0.0') }}
-
 jobs:
   build:
-    name: Build ${{ matrix.os }}
+    name: Build & Package (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: macos-13
+          - os: macos-14
             qt-arch: clang_64
           - os: windows-2022
             qt-arch: win64_msvc2022_64
@@ -32,7 +28,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Qt ${{ matrix.qt-arch }}
+      - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
           version: 6.9.2
@@ -40,20 +36,40 @@ jobs:
           cache: true
           aqtversion: "==3.*"
 
-      - name: Set up CMake & Ninja
+      - name: Install CMake & Ninja
         uses: lukka/get-cmake@v3
-      - name: Add Ninja (Windows)
+
+      - name: Install Ninja (Windows)
         if: runner.os == 'Windows'
         run: choco install ninja --no-progress
+
+      - name: Compute VERSION
+        id: ver
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          ver=""
+          if [[ -n "${INPUT_VERSION}" ]]; then
+            ver="${INPUT_VERSION}"
+          elif [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" == v* ]]; then
+            ver="${GITHUB_REF_NAME#v}"
+          else
+            ver="0.0.0-dev+${GITHUB_RUN_NUMBER}"
+          fi
+          echo "VERSION=$ver" | tee -a "$GITHUB_ENV"
+          echo "version=$ver" >> "$GITHUB_OUTPUT"
 
       # ---------- Configure & Build ----------
       - name: Configure (Release)
         shell: bash
         run: |
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}"
+
       - name: Build (Release)
         shell: bash
-        run: cmake --build build --config Release -j
+        run: cmake --build build --parallel
 
       # ---------- macOS packaging ----------
       - name: Package macOS (.dmg)
@@ -61,57 +77,53 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-
-          APP_NAME="liquidssh"             # <-- adjust if your target name differs
+          APP_NAME="liquidssh"                                   # <- change if your target name differs
           APP_BUNDLE="build/${APP_NAME}.app"
-          test -d "$APP_BUNDLE" || (echo "App bundle not found at $APP_BUNDLE" && ls -la build && exit 1)
+          test -d "$APP_BUNDLE" || (echo "Missing $APP_BUNDLE"; ls -la build; exit 1)
 
           # Bundle Qt frameworks & plugins
           macdeployqt "$APP_BUNDLE" -verbose=2
 
-          # Optional codesign (needs secrets & cert imported). Leave commented if you don't sign yet.
-          # codesign --deep --force --options runtime --sign "$MACOS_SIGNING_IDENTITY" "$APP_BUNDLE"
+          # Optional: codesign and notarize here (can add later)
 
           brew install create-dmg
-          DMG_NAME="LiquidSSH-${VERSION}-macOS.dmg"
-          create-dmg --overwrite --volname "LiquidSSH ${VERSION}" --app-drop-link 400 200 "$DMG_NAME" "$APP_BUNDLE"
-
           mkdir -p dist
+          DMG_NAME="LiquidSSH-${VERSION}-macOS.dmg"
+          create-dmg --overwrite --volname "LiquidSSH ${VERSION}" --app-drop-link 425 200 "$DMG_NAME" "$APP_BUNDLE"
           mv "$DMG_NAME" dist/
 
       # ---------- Windows packaging ----------
-      - name: Install NSIS (Windows)
+      - name: Install NSIS
         if: runner.os == 'Windows'
         run: choco install nsis --no-progress
-      - name: Deploy Qt runtime (Windows)
+
+      - name: Deploy Qt runtime (windeployqt)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $ExeName = "liquidssh.exe" # <-- adjust if your target name differs
+          $ExeName = "liquidssh.exe"  # <- change if your target name differs
           $BuiltExe = Join-Path "build" $ExeName
           if (!(Test-Path $BuiltExe)) {
-            # CMake + Ninja on Windows usually emits into build/ (single-config). If multi-config, check Release\
             $Candidate = Join-Path (Join-Path "build" "Release") $ExeName
             if (Test-Path $Candidate) { $BuiltExe = $Candidate } else {
-              Write-Host "Available files:"; Get-ChildItem -Recurse build | Select-Object -Expand FullName
+              Write-Host "Available files:"
+              Get-ChildItem -Recurse build | Select-Object -Expand FullName
               throw "Could not find built exe ($ExeName)"
             }
           }
 
           New-Item -ItemType Directory -Path "package" -Force | Out-Null
           Copy-Item $BuiltExe package/
+          windeployqt --verbose 2 --dir package "package\$ExeName"
 
-          # windeployqt is on PATH after install-qt-action
-          & windeployqt --verbose 2 --dir package package\$ExeName
-
-      - name: Create NSIS installer (Windows)
+      - name: Create NSIS installer (.exe)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $Version = "${{ env.VERSION }}"
           $ProductName = "LiquidSSH"
-          $ExeName = "liquidssh.exe" # <-- adjust if your target name differs
+          $ExeName = "liquidssh.exe"
           $OutDir = "dist"
           New-Item -ItemType Directory -Path $OutDir -Force | Out-Null
 
