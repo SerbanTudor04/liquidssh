@@ -1,0 +1,166 @@
+name: Build Installers (macOS & Windows)
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Override version (defaults to tag or 0.0.0)"
+        required: false
+        default: ""
+
+env:
+  # If you tag like v1.2.3, this extracts 1.2.3; otherwise uses input or 0.0.0
+  VERSION: ${{ github.ref_type == 'tag' && startsWith(github.ref_name, 'v') && github.ref_name != '' && join(fromJSON('["'']'), '') || (inputs.version != '' && inputs.version || '0.0.0') }}
+
+jobs:
+  build:
+    name: Build ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-13
+            qt-arch: clang_64
+          - os: windows-2022
+            qt-arch: win64_msvc2022_64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Qt ${{ matrix.qt-arch }}
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: 6.9.2
+          arch: ${{ matrix.qt-arch }}
+          cache: true
+          aqtversion: "==3.*"
+
+      - name: Set up CMake & Ninja
+        uses: lukka/get-cmake@v3
+      - name: Add Ninja (Windows)
+        if: runner.os == 'Windows'
+        run: choco install ninja --no-progress
+
+      # ---------- Configure & Build ----------
+      - name: Configure (Release)
+        shell: bash
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}"
+      - name: Build (Release)
+        shell: bash
+        run: cmake --build build --config Release -j
+
+      # ---------- macOS packaging ----------
+      - name: Package macOS (.dmg)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          APP_NAME="liquidssh"             # <-- adjust if your target name differs
+          APP_BUNDLE="build/${APP_NAME}.app"
+          test -d "$APP_BUNDLE" || (echo "App bundle not found at $APP_BUNDLE" && ls -la build && exit 1)
+
+          # Bundle Qt frameworks & plugins
+          macdeployqt "$APP_BUNDLE" -verbose=2
+
+          # Optional codesign (needs secrets & cert imported). Leave commented if you don't sign yet.
+          # codesign --deep --force --options runtime --sign "$MACOS_SIGNING_IDENTITY" "$APP_BUNDLE"
+
+          brew install create-dmg
+          DMG_NAME="LiquidSSH-${VERSION}-macOS.dmg"
+          create-dmg --overwrite --volname "LiquidSSH ${VERSION}" --app-drop-link 400 200 "$DMG_NAME" "$APP_BUNDLE"
+
+          mkdir -p dist
+          mv "$DMG_NAME" dist/
+
+      # ---------- Windows packaging ----------
+      - name: Install NSIS (Windows)
+        if: runner.os == 'Windows'
+        run: choco install nsis --no-progress
+      - name: Deploy Qt runtime (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $ExeName = "liquidssh.exe" # <-- adjust if your target name differs
+          $BuiltExe = Join-Path "build" $ExeName
+          if (!(Test-Path $BuiltExe)) {
+            # CMake + Ninja on Windows usually emits into build/ (single-config). If multi-config, check Release\
+            $Candidate = Join-Path (Join-Path "build" "Release") $ExeName
+            if (Test-Path $Candidate) { $BuiltExe = $Candidate } else {
+              Write-Host "Available files:"; Get-ChildItem -Recurse build | Select-Object -Expand FullName
+              throw "Could not find built exe ($ExeName)"
+            }
+          }
+
+          New-Item -ItemType Directory -Path "package" -Force | Out-Null
+          Copy-Item $BuiltExe package/
+
+          # windeployqt is on PATH after install-qt-action
+          & windeployqt --verbose 2 --dir package package\$ExeName
+
+      - name: Create NSIS installer (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $Version = "${{ env.VERSION }}"
+          $ProductName = "LiquidSSH"
+          $ExeName = "liquidssh.exe" # <-- adjust if your target name differs
+          $OutDir = "dist"
+          New-Item -ItemType Directory -Path $OutDir -Force | Out-Null
+
+          $Nsi = @"
+          !define PRODUCT_NAME "$ProductName"
+          !define PRODUCT_VERSION "$Version"
+          !define EXE_NAME "$ExeName"
+          !define INSTALL_DIR "\$PROGRAMFILES64\\$ProductName"
+
+          SetCompressor /SOLID lzma
+          Unicode true
+          RequestExecutionLevel admin
+          Name "\${PRODUCT_NAME} \${PRODUCT_VERSION}"
+          OutFile "$OutDir\\${ProductName}-${Version}-win64-setup.exe"
+          InstallDir "\${INSTALL_DIR}"
+
+          Page directory
+          Page instfiles
+          UninstPage uninstConfirm
+          UninstPage instfiles
+
+          Section "Install"
+            SetOutPath "\${INSTALL_DIR}"
+            File /r "package\\*.*"
+            CreateShortCut "$SMPROGRAMS\\${ProductName}.lnk" "\${INSTALL_DIR}\\\${EXE_NAME}"
+            CreateShortCut "$DESKTOP\\${ProductName}.lnk" "\${INSTALL_DIR}\\\${EXE_NAME}"
+            WriteUninstaller "\${INSTALL_DIR}\\Uninstall.exe"
+          SectionEnd
+
+          Section "Uninstall"
+            Delete "$SMPROGRAMS\\${ProductName}.lnk"
+            Delete "$DESKTOP\\${ProductName}.lnk"
+            RMDir /r "\${INSTALL_DIR}"
+          SectionEnd
+  "@
+  Set-Content -Path installer.nsi -Value $Nsi -Encoding UTF8
+  & makensis installer.nsi
+
+# ---------- Upload artifacts ----------
+- name: Upload macOS DMG
+  if: runner.os == 'macOS'
+  uses: actions/upload-artifact@v4
+  with:
+    name: LiquidSSH-macOS
+    path: dist/*.dmg
+
+- name: Upload Windows Installer
+  if: runner.os == 'Windows'
+  uses: actions/upload-artifact@v4
+  with:
+    name: LiquidSSH-Windows
+    path: dist/*.exe
