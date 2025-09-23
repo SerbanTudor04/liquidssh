@@ -37,11 +37,15 @@ jobs:
           aqtversion: "==3.*"
 
       - name: Setup CMake
-        uses: actions/setup-cmake@v4
+        uses: jwlawson/actions-setup-cmake@v2
 
       - name: Install Ninja (Windows)
         if: runner.os == 'Windows'
         run: choco install ninja --no-progress
+
+      - name: Install Ninja (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ninja
 
       - name: Compute VERSION
         id: ver
@@ -64,7 +68,9 @@ jobs:
       - name: Configure (Release)
         shell: bash
         run: |
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}"
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="${Qt6_DIR}"
 
       - name: Build (Release)
         shell: bash
@@ -86,7 +92,8 @@ jobs:
           brew install create-dmg
           mkdir -p dist
           DMG_NAME="LiquidSSH-${VERSION}-macOS.dmg"
-          create-dmg --overwrite --volname "LiquidSSH ${VERSION}" --app-drop-link 425 200 "$DMG_NAME" "$APP_BUNDLE"
+          create-dmg --overwrite --volname "LiquidSSH ${VERSION}" \
+            --app-drop-link 425 200 "$DMG_NAME" "$APP_BUNDLE"
           mv "$DMG_NAME" dist/
 
       # ---------- Windows packaging ----------
@@ -101,11 +108,10 @@ jobs:
           set -euo pipefail
           EXE_NAME="liquidssh.exe"   # <-- change if your target differs
           BUILT_EXE="build/${EXE_NAME}"
+          [[ -f "$BUILT_EXE" ]] || BUILT_EXE="build/Release/${EXE_NAME}"
           if [[ ! -f "$BUILT_EXE" ]]; then
-            BUILT_EXE="build/Release/${EXE_NAME}"
-          fi
-          if [[ ! -f "$BUILT_EXE" ]]; then
-            echo "Could not find built exe ($EXE_NAME)"; find build -maxdepth 3 -type f -name "*.exe" -print
+            echo "Could not find built exe ($EXE_NAME)"
+            find build -maxdepth 3 -type f -name "*.exe" -print
             exit 1
           fi
 
@@ -151,7 +157,6 @@ jobs:
             RMDir /r "${INSTALL_DIR}"
           SectionEnd
           NSI
-          # Expand VERSION into the NSI (simple replace)
           sed -i.bak "s/\${VERSION}/${VERSION}/g" installer.nsi
           makensis installer.nsi
 
