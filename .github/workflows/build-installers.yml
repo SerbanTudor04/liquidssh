@@ -50,7 +50,6 @@ jobs:
           INPUT_VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
-          ver=""
           if [[ -n "${INPUT_VERSION}" ]]; then
             ver="${INPUT_VERSION}"
           elif [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" == v* ]]; then
@@ -77,14 +76,16 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          APP_NAME="liquidssh"                                   # <- change if your target name differs
-          APP_BUNDLE="build/${APP_NAME}.app"
-          test -d "$APP_BUNDLE" || (echo "Missing $APP_BUNDLE"; ls -la build; exit 1)
+          # Find the .app (assumes MACOSX_BUNDLE in CMake)
+          APP_BUNDLE="$(find build -maxdepth 1 -name '*.app' | head -n 1)"
+          if [[ -z "$APP_BUNDLE" ]]; then
+            echo "No .app bundle found in build/"; ls -la build; exit 1
+          fi
 
           # Bundle Qt frameworks & plugins
           macdeployqt "$APP_BUNDLE" -verbose=2
 
-          # Optional: codesign and notarize here (can add later)
+          # Optional: codesign & notarize here
 
           brew install create-dmg
           mkdir -p dist
@@ -99,45 +100,45 @@ jobs:
 
       - name: Deploy Qt runtime (windeployqt)
         if: runner.os == 'Windows'
-        shell: pwsh
+        shell: bash
         run: |
-          $ErrorActionPreference = "Stop"
-          $ExeName = "liquidssh.exe"  # <- change if your target name differs
-          $BuiltExe = Join-Path "build" $ExeName
-          if (!(Test-Path $BuiltExe)) {
-            $Candidate = Join-Path (Join-Path "build" "Release") $ExeName
-            if (Test-Path $Candidate) { $BuiltExe = $Candidate } else {
-              Write-Host "Available files:"
-              Get-ChildItem -Recurse build | Select-Object -Expand FullName
-              throw "Could not find built exe ($ExeName)"
-            }
-          }
+          set -euo pipefail
+          EXE_NAME="liquidssh.exe"   # <-- change if your target differs
+          BUILT_EXE="build/${EXE_NAME}"
+          if [[ ! -f "$BUILT_EXE" ]]; then
+            # Fallback for multi-config generators (shouldn't happen with Ninja)
+            BUILT_EXE="build/Release/${EXE_NAME}"
+          fi
+          if [[ ! -f "$BUILT_EXE" ]]; then
+            echo "Could not find built exe ($EXE_NAME)"; find build -maxdepth 2 -type f -name "*.exe" -print
+            exit 1
+          fi
 
-          New-Item -ItemType Directory -Path "package" -Force | Out-Null
-          Copy-Item $BuiltExe package/
-          windeployqt --verbose 2 --dir package "package\$ExeName"
+          mkdir -p package
+          cp "$BUILT_EXE" package/
+
+          # windeployqt should be in PATH from install-qt-action
+          windeployqt --verbose 2 --dir package "package/${EXE_NAME}"
 
       - name: Create NSIS installer (.exe)
         if: runner.os == 'Windows'
-        shell: pwsh
+        shell: bash
         run: |
-          $Version = "${{ env.VERSION }}"
-          $ProductName = "LiquidSSH"
-          $ExeName = "liquidssh.exe"
-          $OutDir = "dist"
-          New-Item -ItemType Directory -Path $OutDir -Force | Out-Null
+          set -euo pipefail
+          mkdir -p dist
 
-          $Nsi = @"
-          !define PRODUCT_NAME "$ProductName"
-          !define PRODUCT_VERSION "$Version"
-          !define EXE_NAME "$ExeName"
-          !define INSTALL_DIR "\$PROGRAMFILES64\\$ProductName"
+          # Generate NSIS script (escape NSIS $ variables as \$ to avoid bash expansion)
+          cat > installer.nsi <<NSI
+          !define PRODUCT_NAME "LiquidSSH"
+          !define PRODUCT_VERSION "${VERSION}"
+          !define EXE_NAME "liquidssh.exe"
+          !define INSTALL_DIR "\$PROGRAMFILES64\\\${PRODUCT_NAME}"
 
           SetCompressor /SOLID lzma
           Unicode true
           RequestExecutionLevel admin
           Name "\${PRODUCT_NAME} \${PRODUCT_VERSION}"
-          OutFile "$OutDir\\${ProductName}-${Version}-win64-setup.exe"
+          OutFile "dist\\\${PRODUCT_NAME}-\${PRODUCT_VERSION}-win64-setup.exe"
           InstallDir "\${INSTALL_DIR}"
 
           Page directory
@@ -147,32 +148,33 @@ jobs:
 
           Section "Install"
             SetOutPath "\${INSTALL_DIR}"
-            File /r "package\\*.*"
-            CreateShortCut "$SMPROGRAMS\\${ProductName}.lnk" "\${INSTALL_DIR}\\\${EXE_NAME}"
-            CreateShortCut "$DESKTOP\\${ProductName}.lnk" "\${INSTALL_DIR}\\\${EXE_NAME}"
-            WriteUninstaller "\${INSTALL_DIR}\\Uninstall.exe"
+            File /r "package\\\*.*"
+            CreateShortCut "\$SMPROGRAMS\\\${PRODUCT_NAME}.lnk" "\${INSTALL_DIR}\\\${EXE_NAME}"
+            CreateShortCut "\$DESKTOP\\\${PRODUCT_NAME}.lnk" "\${INSTALL_DIR}\\\${EXE_NAME}"
+            WriteUninstaller "\${INSTALL_DIR}\\\Uninstall.exe"
           SectionEnd
 
           Section "Uninstall"
-            Delete "$SMPROGRAMS\\${ProductName}.lnk"
-            Delete "$DESKTOP\\${ProductName}.lnk"
+            Delete "\$SMPROGRAMS\\\${PRODUCT_NAME}.lnk"
+            Delete "\$DESKTOP\\\${PRODUCT_NAME}.lnk"
             RMDir /r "\${INSTALL_DIR}"
           SectionEnd
-  "@
-  Set-Content -Path installer.nsi -Value $Nsi -Encoding UTF8
-  & makensis installer.nsi
+          NSI
 
-# ---------- Upload artifacts ----------
-- name: Upload macOS DMG
-  if: runner.os == 'macOS'
-  uses: actions/upload-artifact@v4
-  with:
-    name: LiquidSSH-macOS
-    path: dist/*.dmg
+          # Build installer
+          makensis installer.nsi
 
-- name: Upload Windows Installer
-  if: runner.os == 'Windows'
-  uses: actions/upload-artifact@v4
-  with:
-    name: LiquidSSH-Windows
-    path: dist/*.exe
+      # ---------- Upload artifacts ----------
+      - name: Upload macOS DMG
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: LiquidSSH-macOS
+          path: dist/*.dmg
+
+      - name: Upload Windows Installer
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: LiquidSSH-Windows
+          path: dist/*.exe
