@@ -15,6 +15,13 @@ set(CMAKE_AUTORCC ON)
 find_package(QT NAMES Qt6 REQUIRED COMPONENTS Widgets)
 find_package(Qt6 REQUIRED COMPONENTS Widgets)
 
+# ---- LibSSH
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(LIBSSH REQUIRED libssh)
+target_include_directories(liquidssh PRIVATE ${LIBSSH_INCLUDE_DIRS})
+target_link_directories(liquidssh PRIVATE ${LIBSSH_LIBRARY_DIRS})
+target_link_libraries(liquidssh PRIVATE ${LIBSSH_LIBRARIES})
+
 # --- Base target sources (shared for all platforms)
 add_executable(liquidssh
         src/main.cpp
@@ -35,6 +42,8 @@ add_executable(liquidssh
         src/CustomTabWidget.h
         src/GlassCloseButton.cpp
         src/GlassCloseButton.h
+        src/TerminalView.cpp
+        src/TerminalView.h
 )
 
 # --- Platform-specific implementation

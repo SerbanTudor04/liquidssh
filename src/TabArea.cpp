@@ -31,24 +31,13 @@ TabArea::TabArea(QWidget *parent) : QWidget(parent) {
     tabs->tabBar()->setExpanding(false);
 
     tabs->setStyleSheet(R"(
-      /* Anchor the tab bar to the left/top so it won’t float centered */
-      QTabWidget::tab-bar {
-        alignment: left;
-        left: 0px; right: 0px; /* allow full-width bar */
-      }
-
-      /* Give the pane a top padding so the bar has a “ledge” to sit on */
-
     QTabBar { background: transparent; qproperty-drawBase: 0; }
     QTabBar::tab {
       color: #ECECEC;
-      border: none;              /* painter handles strokes */
+      border: none;            /* painter handles strokes */
       border-radius: 16px;
       padding: 6px 12px;
       margin: 6px 6px 0 6px;
-    }
-    QTabBar::tab:selected { /* label emphasis only */
-      font-weight: 600;
     }
     QTabWidget::pane {
       background: transparent;
@@ -57,11 +46,13 @@ TabArea::TabArea(QWidget *parent) : QWidget(parent) {
       padding-top: 8px;
     }
     QTabWidget::tab-bar { alignment: left; }
+    QTabBar::close-button { width: 0; height: 0; } /* disable native one */
+
 
     )");
 
     info = new InfoTab(this);
-    int infoIndex = tabs->addTab(info, makeStatusIcon(QColor(130,180,255,230)), "Info");
+    int infoIndex = tabs->addTab(info, "Info");
     tabs->tabBar()->setTabButton(infoIndex, QTabBar::RightSide, nullptr);
 
     auto *lay = new QVBoxLayout(this);
@@ -87,7 +78,7 @@ void TabArea::openHostTab(const QString &host) {
     if (idx >= 0) { tabs->setCurrentIndex(idx); return; }
 
     auto *term = new TerminalTab(host, this);
-    int newIndex = tabs->addTab(term, makeStatusIcon(QColor(120,200,255,230)), host);
+    int newIndex = tabs->addTab(term, host);
     tabs->setCurrentIndex(newIndex);
 }
 
