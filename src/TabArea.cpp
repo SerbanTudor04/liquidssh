@@ -7,6 +7,7 @@
 #include <QTabBar>
 #include <QVBoxLayout>
 #include <QPainter>
+#include <qstyle.h>
 
 #include "CustomTabWidget.h"
 
@@ -56,9 +57,19 @@ TabArea::TabArea(QWidget *parent) : QWidget(parent) {
     tabs->tabBar()->setTabButton(infoIndex, QTabBar::RightSide, nullptr);
 
     auto *lay = new QVBoxLayout(this);
-    lay->setContentsMargins(0,0,0,0);
+    lay->setSpacing(0);
+
+#ifdef Q_OS_MAC
+    // Titlebar height is ~22–28 px depending on theme; add a few px padding.
+    const int titlebar = style()->pixelMetric(QStyle::PM_TitleBarHeight, nullptr, this);
+    lay->setContentsMargins(0, titlebar + 6, 0, 0);
+#else
+    lay->setContentsMargins(0, 0, 0, 0);
+#endif
+
     lay->addWidget(tabs);
     setLayout(lay);
+
 }
 
 
