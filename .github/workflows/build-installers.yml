@@ -1,4 +1,4 @@
-name: Build Installers (macOS & Windows)
+name: Build macOS DMG (LiquidSSH)
 
 on:
   push:
@@ -12,62 +12,28 @@ on:
         default: ""
 
 jobs:
-  build:
-    name: Build & Package (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-14
-            qt-arch: clang_64
-          - os: windows-2022
-            qt-arch: win64_msvc2022_64
+  macos:
+    runs-on: macos-14
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Qt
+      - name: Install Qt (6.9.2)
         uses: jurplel/install-qt-action@v4
         with:
           version: 6.9.2
-          arch: ${{ matrix.qt-arch }}
+          arch: clang_64
           cache: true
           aqtversion: "==3.*"
 
       - name: Setup CMake
         uses: jwlawson/actions-setup-cmake@v2
 
-      - name: Install Ninja (Windows)
-        if: runner.os == 'Windows'
-        run: choco install ninja --no-progress
-
-      - name: Install Ninja (macOS)
-        if: runner.os == 'macOS'
-        run: brew install ninja
-
-      # ---------- NEW: deps for macOS ----------
-      - name: Install libssh (macOS)
-        if: runner.os == 'macOS'
-        shell: bash
+      - name: Install build tools
         run: |
-          set -euo pipefail
           brew update
-          brew install libssh
-          # Ensure pkg-config can see libssh (usually already fine)
-          echo "PKG_CONFIG_PATH=$(brew --prefix libssh)/lib/pkgconfig:${PKG_CONFIG_PATH:-}" >> "$GITHUB_ENV"
-
-      # ---------- NEW: deps for Windows via vcpkg ----------
-      - name: Set up vcpkg (Windows)
-        if: runner.os == 'Windows'
-        uses: lukka/run-vcpkg@v11
-        with:
-          # Pin to a stable commit for reproducibility (sample hash; you can update later)
-          vcpkgGitCommitId: 8b9d2a7f8e1a1d3b6820a86d6a0f0e6a3d3a6b65
-          triplet: x64-windows
-          runVcpkgInstall: true
-          vcpkgArguments: 'libssh pkgconf'  # libssh + pkg-config tool
+          brew install ninja libssh create-dmg
 
       - name: Compute VERSION
         id: ver
@@ -86,126 +52,42 @@ jobs:
           echo "VERSION=$ver" | tee -a "$GITHUB_ENV"
           echo "version=$ver" >> "$GITHUB_OUTPUT"
 
-      # ---------- Configure & Build ----------
       - name: Configure (Release)
         shell: bash
-        env:
-          # NEW: help pkg-config on Windows (from vcpkg)
-          VCPKG_ROOT: ${{ env.VCPKG_ROOT }}
-          PKG_CONFIG: ${{ runner.os == 'Windows' && format('{0}/installed/x64-windows/tools/pkgconf/pkgconf.exe', env.VCPKG_ROOT) || '' }}
-          PKG_CONFIG_PATH: ${{ runner.os == 'Windows' && format('{0}/installed/x64-windows/lib/pkgconfig', env.VCPKG_ROOT) || env.PKG_CONFIG_PATH }}
         run: |
           set -euo pipefail
-          if [[ "${RUNNER_OS}" == "Windows" ]]; then
-            TOOLCHAIN="-DCMAKE_TOOLCHAIN_FILE=${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
-          else
-            TOOLCHAIN=""
-          fi
-
+          # Prefer Qt6_DIR if present; fall back to QT_ROOT_DIR provided by install-qt-action.
+          QT_PREFIX="${Qt6_DIR:-${QT_ROOT_DIR}}"
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_PREFIX_PATH="${Qt6_DIR}" \
-            ${TOOLCHAIN}
+            -DCMAKE_PREFIX_PATH="$QT_PREFIX"
 
       - name: Build (Release)
-        shell: bash
         run: cmake --build build --parallel
 
-      # ---------- macOS packaging ----------
-      - name: Package macOS (.dmg)
-        if: runner.os == 'macOS'
+      - name: Package .app with macdeployqt and create DMG
         shell: bash
         run: |
-          set -euxo pipefail
-          APP_BUNDLE="$(find build -maxdepth 1 -name '*.app' | head -n 1)"
+          set -euo pipefail
+          APP_BUNDLE="$(find build -maxdepth 2 -name '*.app' | head -n 1)"
           if [[ -z "$APP_BUNDLE" ]]; then
-            echo "No .app bundle found in build/"; ls -la build; exit 1
+            echo "No .app bundle found in build/. Ensure your CMake target has MACOSX_BUNDLE enabled."
+            ls -la build
+            exit 1
           fi
 
+          echo "Found app: $APP_BUNDLE"
+          # Bundle Qt frameworks & plugins
           macdeployqt "$APP_BUNDLE" -verbose=2
 
-          brew install create-dmg
           mkdir -p dist
           DMG_NAME="LiquidSSH-${VERSION}-macOS.dmg"
           create-dmg --overwrite --volname "LiquidSSH ${VERSION}" \
             --app-drop-link 425 200 "$DMG_NAME" "$APP_BUNDLE"
           mv "$DMG_NAME" dist/
 
-      # ---------- Windows packaging ----------
-      - name: Install NSIS
-        if: runner.os == 'Windows'
-        run: choco install nsis --no-progress
-
-      - name: Deploy Qt runtime (windeployqt)
-        if: runner.os == 'Windows'
-        shell: bash
-        run: |
-          set -euo pipefail
-          EXE_NAME="liquidssh.exe"   # <-- change if your target differs
-          BUILT_EXE="build/${EXE_NAME}"
-          [[ -f "$BUILT_EXE" ]] || BUILT_EXE="build/Release/${EXE_NAME}"
-          if [[ ! -f "$BUILT_EXE" ]]; then
-            echo "Could not find built exe ($EXE_NAME)"
-            find build -maxdepth 3 -type f -name "*.exe" -print
-            exit 1
-          fi
-
-          mkdir -p package
-          cp "$BUILT_EXE" package/
-          windeployqt --verbose 2 --dir package "package/${EXE_NAME}"
-
-      - name: Create NSIS installer (.exe)
-        if: runner.os == 'Windows'
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p dist
-          cat > installer.nsi <<'NSI'
-          !define PRODUCT_NAME "LiquidSSH"
-          !define PRODUCT_VERSION "${VERSION}"
-          !define EXE_NAME "liquidssh.exe"
-          !define INSTALL_DIR "$PROGRAMFILES64\${PRODUCT_NAME}"
-
-          SetCompressor /SOLID lzma
-          Unicode true
-          RequestExecutionLevel admin
-          Name "${PRODUCT_NAME} ${PRODUCT_VERSION}"
-          OutFile "dist\${PRODUCT_NAME}-${PRODUCT_VERSION}-win64-setup.exe"
-          InstallDir "${INSTALL_DIR}"
-
-          Page directory
-          Page instfiles
-          UninstPage uninstConfirm
-          UninstPage instfiles
-
-          Section "Install"
-            SetOutPath "${INSTALL_DIR}"
-            File /r "package\*.*"
-            CreateShortCut "$SMPROGRAMS\${PRODUCT_NAME}.lnk" "${INSTALL_DIR}\${EXE_NAME}"
-            CreateShortCut "$DESKTOP\${PRODUCT_NAME}.lnk" "${INSTALL_DIR}\${EXE_NAME}"
-            WriteUninstaller "${INSTALL_DIR}\Uninstall.exe"
-          SectionEnd
-
-          Section "Uninstall"
-            Delete "$SMPROGRAMS\${PRODUCT_NAME}.lnk"
-            Delete "$DESKTOP\${PRODUCT_NAME}.lnk"
-            RMDir /r "${INSTALL_DIR}"
-          SectionEnd
-          NSI
-          sed -i.bak "s/\${VERSION}/${VERSION}/g" installer.nsi
-          makensis installer.nsi
-
-      # ---------- Upload artifacts ----------
-      - name: Upload macOS DMG
-        if: runner.os == 'macOS'
+      - name: Upload DMG artifact
         uses: actions/upload-artifact@v4
         with:
           name: LiquidSSH-macOS
           path: dist/*.dmg
-
-      - name: Upload Windows Installer
-        if: runner.os == 'Windows'
-        uses: actions/upload-artifact@v4
-        with:
-          name: LiquidSSH-Windows
-          path: dist/*.exe
