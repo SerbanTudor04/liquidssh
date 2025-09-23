@@ -47,6 +47,28 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install ninja
 
+      # ---------- NEW: deps for macOS ----------
+      - name: Install libssh (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          brew update
+          brew install libssh
+          # Ensure pkg-config can see libssh (usually already fine)
+          echo "PKG_CONFIG_PATH=$(brew --prefix libssh)/lib/pkgconfig:${PKG_CONFIG_PATH:-}" >> "$GITHUB_ENV"
+
+      # ---------- NEW: deps for Windows via vcpkg ----------
+      - name: Set up vcpkg (Windows)
+        if: runner.os == 'Windows'
+        uses: microsoft/vcpkg-action@v1
+        with:
+          # Pin to a stable commit for reproducibility (sample hash; you can update later)
+          vcpkgGitCommitId: 8b9d2a7f8e1a1d3b6820a86d6a0f0e6a3d3a6b65
+          triplet: x64-windows
+          runVcpkgInstall: true
+          vcpkgArguments: 'libssh pkgconf'  # libssh + pkg-config tool
+
       - name: Compute VERSION
         id: ver
         shell: bash
@@ -67,10 +89,23 @@ jobs:
       # ---------- Configure & Build ----------
       - name: Configure (Release)
         shell: bash
+        env:
+          # NEW: help pkg-config on Windows (from vcpkg)
+          VCPKG_ROOT: ${{ env.VCPKG_ROOT }}
+          PKG_CONFIG: ${{ runner.os == 'Windows' && format('{0}/installed/x64-windows/tools/pkgconf/pkgconf.exe', env.VCPKG_ROOT) || '' }}
+          PKG_CONFIG_PATH: ${{ runner.os == 'Windows' && format('{0}/installed/x64-windows/lib/pkgconfig', env.VCPKG_ROOT) || env.PKG_CONFIG_PATH }}
         run: |
+          set -euo pipefail
+          if [[ "${RUNNER_OS}" == "Windows" ]]; then
+            TOOLCHAIN="-DCMAKE_TOOLCHAIN_FILE=${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+          else
+            TOOLCHAIN=""
+          fi
+
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_PREFIX_PATH="${Qt6_DIR}"
+            -DCMAKE_PREFIX_PATH="${Qt6_DIR}" \
+            ${TOOLCHAIN}
 
       - name: Build (Release)
         shell: bash
