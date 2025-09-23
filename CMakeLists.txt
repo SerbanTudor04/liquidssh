@@ -1,52 +1,35 @@
-cmake_minimum_required(VERSION 3.20)  # Qt6 needs >=3.16; 3.20+ is safe
+cmake_minimum_required(VERSION 3.20)
 project(liquidssh LANGUAGES CXX)
 
-# --- C++23, no extensions
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# --- Qt's auto-moc/uic/rcc
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
-# --- Qt6
 find_package(QT NAMES Qt6 REQUIRED COMPONENTS Widgets)
 find_package(Qt6 REQUIRED COMPONENTS Widgets)
 
-# ---- LibSSH
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(LIBSSH REQUIRED libssh)
-target_include_directories(liquidssh PRIVATE ${LIBSSH_INCLUDE_DIRS})
-target_link_directories(liquidssh PRIVATE ${LIBSSH_LIBRARY_DIRS})
-target_link_libraries(liquidssh PRIVATE ${LIBSSH_LIBRARIES})
-
-# --- Base target sources (shared for all platforms)
+# --- Sources/headers
 add_executable(liquidssh
         src/main.cpp
-        src/MainWindow.cpp
-        src/MainWindow.h
+        src/MainWindow.cpp          src/MainWindow.h
         src/Glass.h
-        src/Sidebar.cpp
-        src/Sidebar.h
-        src/InfoTab.cpp
-        src/InfoTab.h
-        src/TabArea.cpp
-        src/TabArea.h
-        src/TerminalTab.cpp
-        src/TerminalTab.h
-        src/CustomTabBar.cpp
-        src/CustomTabBar.h
-        src/CustomTabWidget.cpp
-        src/CustomTabWidget.h
-        src/GlassCloseButton.cpp
-        src/GlassCloseButton.h
-        src/TerminalView.cpp
-        src/TerminalView.h
+        src/Sidebar.cpp             src/Sidebar.h
+        src/InfoTab.cpp             src/InfoTab.h
+        src/TabArea.cpp             src/TabArea.h
+        src/TerminalTab.cpp         src/TerminalTab.h
+        src/TerminalView.cpp        src/TerminalView.h
+        src/CustomTabBar.cpp        src/CustomTabBar.h
+        src/CustomTabWidget.cpp     src/CustomTabWidget.h
+        src/GlassCloseButton.cpp    src/GlassCloseButton.h
+        src/SSHWorker.cpp
+        src/SSHWorker.h
 )
 
-# --- Platform-specific implementation
+# Platform-specific glass
 if(APPLE)
     target_sources(liquidssh PRIVATE src/Glass_mac.mm)
     set_source_files_properties(src/Glass_mac.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc")
@@ -58,13 +41,17 @@ else()
     target_sources(liquidssh PRIVATE src/Glass_stub.cpp)
 endif()
 
-# --- Qt link
+# Qt
 target_link_libraries(liquidssh PRIVATE Qt6::Widgets)
-
-# --- Include dir
 target_include_directories(liquidssh PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-# --- Platform niceties
+# --- libssh via pkg-config (after add_executable!)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(LIBSSH REQUIRED IMPORTED_TARGET libssh)
+# This single line adds include dirs, link dirs, and -lssh cleanly:
+target_link_libraries(liquidssh PRIVATE PkgConfig::LIBSSH)
+
+# Bundle niceties
 if(APPLE)
     set_target_properties(liquidssh PROPERTIES
             MACOSX_BUNDLE TRUE

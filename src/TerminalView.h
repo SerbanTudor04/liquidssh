@@ -1,6 +1,5 @@
 #pragma once
 #include <QPlainTextEdit>
-#include <QRegularExpression>
 
 class TerminalView : public QPlainTextEdit {
     Q_OBJECT
@@ -15,7 +14,6 @@ public slots:
 
 protected:
     void keyPressEvent(QKeyEvent *e) override;
-    void resizeEvent(QResizeEvent *e) override;
 
 private:
     QByteArray ansiStrip(const QByteArray& in) const;
