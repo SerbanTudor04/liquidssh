@@ -33,6 +33,8 @@ add_executable(liquidssh
         src/CustomTabBar.h
         src/CustomTabWidget.cpp
         src/CustomTabWidget.h
+        src/GlassCloseButton.cpp
+        src/GlassCloseButton.h
 )
 
 # --- Platform-specific implementation

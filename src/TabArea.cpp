@@ -16,39 +16,50 @@ static QIcon makeStatusIcon(const QColor &c, int d = 12);
 TabArea::TabArea(QWidget *parent) : QWidget(parent) {
     setAttribute(Qt::WA_TranslucentBackground, true);
 
-    tabs = new CustomTabWidget(this);   // << was new QTabWidget(...)
-    tabs->setAttribute(Qt::WA_TranslucentBackground, true);
+    tabs = new CustomTabWidget(this);
 
-    // Behavior
+    // DO NOT make the QTabWidget itself translucent on macOS — it confuses the layout
+    // tabs->setAttribute(Qt::WA_TranslucentBackground, true);  // <-- remove this
+
     tabs->setMovable(true);
     tabs->setTabsClosable(true);
     tabs->setDocumentMode(false);
     tabs->setElideMode(Qt::ElideRight);
     tabs->setTabBarAutoHide(false);
     tabs->setIconSize(QSize(12,12));
+    tabs->setTabPosition(QTabWidget::North);
+    tabs->tabBar()->setExpanding(false);
 
-    // Stylesheet (unchanged)
     tabs->setStyleSheet(R"(
-      QTabWidget::pane { background: transparent; border: 1px solid rgba(255,255,255,0.10); border-top: none; }
-      QTabBar { background: transparent; qproperty-drawBase: 0; }
-      QTabBar::tab {
-        color: #ECECEC;
-        background: rgba(255,255,255,0.10);
-        border: 1px solid rgba(255,255,255,0.22);
-        border-radius: 16px;
-        padding: 6px 12px;
-        margin: 6px 6px 0 6px;
+      /* Anchor the tab bar to the left/top so it won’t float centered */
+      QTabWidget::tab-bar {
+        alignment: left;
+        left: 0px; right: 0px; /* allow full-width bar */
       }
-      QTabBar::tab:selected {
-        background: rgba(255,255,255,0.22);
-        border: 1px solid rgba(255,255,255,0.32);
-        margin-top: 5px;
-      }
-      QTabBar::tab:hover { background: rgba(255,255,255,0.16); }
-      QTabBar::close-button { subcontrol-position: right; margin-left: 6px; }
+
+      /* Give the pane a top padding so the bar has a “ledge” to sit on */
+
+    QTabBar { background: transparent; qproperty-drawBase: 0; }
+    QTabBar::tab {
+      color: #ECECEC;
+      border: none;              /* painter handles strokes */
+      border-radius: 16px;
+      padding: 6px 12px;
+      margin: 6px 6px 0 6px;
+    }
+    QTabBar::tab:selected { /* label emphasis only */
+      font-weight: 600;
+    }
+    QTabWidget::pane {
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.10);
+      border-top: none;
+      padding-top: 8px;
+    }
+    QTabWidget::tab-bar { alignment: left; }
+
     )");
 
-    // Tabs
     info = new InfoTab(this);
     int infoIndex = tabs->addTab(info, makeStatusIcon(QColor(130,180,255,230)), "Info");
     tabs->tabBar()->setTabButton(infoIndex, QTabBar::RightSide, nullptr);
@@ -58,6 +69,7 @@ TabArea::TabArea(QWidget *parent) : QWidget(parent) {
     lay->addWidget(tabs);
     setLayout(lay);
 }
+
 
 int TabArea::findTabByText(const QString &text) const {
     for (int i = 0; i < tabs->count(); ++i)
