@@ -16,7 +16,7 @@ if(APPLE)
     # set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "Universal")
 endif()
 
-# Qt
+# ---------------- Qt ----------------
 find_package(QT NAMES Qt6 REQUIRED COMPONENTS Widgets)
 find_package(Qt6 REQUIRED COMPONENTS Widgets)
 
@@ -34,8 +34,7 @@ add_executable(liquidssh
         src/CustomTabWidget.cpp     src/CustomTabWidget.h
         src/GlassCloseButton.cpp    src/GlassCloseButton.h
         src/SSHWorker.cpp           src/SSHWorker.h
-
-        # resources/liquidssh.qrc  # <- add if you have one
+        # resources/liquidssh.qrc  # add if you have one
 )
 
 # Platform-specific glass
@@ -63,15 +62,18 @@ endif()
 
 # ---------------- macOS bundle niceties ----------------
 if(APPLE)
+    # App identity & version for Info.plist
     set(LIQUIDSSH_BUNDLE_ID "com.tgssoftware.liquidssh")
-    set(LIQUIDSSH_VERSION    "0.0.0")
-    set(LIQUIDSSH_SHORTVER   "0.0.0")
+    set(LIQUIDSSH_VERSION   "0.0.0")
+    set(LIQUIDSSH_SHORTVER  "0.0.0")
 
+    # Icon
     set(MACOSX_BUNDLE_ICON_FILE "LiquidSSH.icns")
     set_source_files_properties(resources/icons/LiquidSSH.icns PROPERTIES
             MACOSX_PACKAGE_LOCATION "Resources")
     target_sources(liquidssh PRIVATE resources/icons/LiquidSSH.icns)
 
+    # Info.plist from template with @VAR@ tokens
     set(INFO_PLIST_IN  "${CMAKE_CURRENT_SOURCE_DIR}/resources/Info.plist.in")
     set(INFO_PLIST_OUT "${CMAKE_CURRENT_BINARY_DIR}/Info.plist")
     configure_file("${INFO_PLIST_IN}" "${INFO_PLIST_OUT}" @ONLY)
@@ -90,84 +92,163 @@ install(TARGETS liquidssh
 )
 
 # ====================================================================================
-# Debug vs Release behavior (macOS)
-# - Debug: run-from-SDK/Homebrew, no bundling/no signing; smooth CLion run.
-# - Release: bundle libssh + Qt into .app and deep ad-hoc sign.
-# Works with single-config (Ninja) and multi-config (Xcode) via generator expressions.
+# macOS: Debug vs Release behavior
+# - Debug/dev (CLion): run-from-SDK/Homebrew; no bundling, no signing; add RPATHs
+# - Release/RelWithDebInfo: bundle libssh + Qt via macdeployqt; deep ad-hoc sign (last)
 # ====================================================================================
 if(APPLE)
-    # Useful paths (tweak if your setup differs)
-    set(HOMEBREW_PREFIX "/opt/homebrew")            # Intel: /usr/local
+    set(CMAKE_MACOSX_RPATH ON)
+
+    # Paths (adjust if needed)
+    set(HOMEBREW_PREFIX "/opt/homebrew")      # Intel Macs: /usr/local
     set(QT_HINT "$ENV{Qt6_DIR}")
     if(NOT QT_HINT OR QT_HINT STREQUAL "")
         set(QT_HINT "$ENV{QT_ROOT_DIR}")
     endif()
 
-    # Common rpath defaults (both configs keep Frameworks searchable)
+    # Base rpath: inside the app bundle
+    set(BASE_RPATH "@executable_path/../Frameworks;@loader_path/../Frameworks")
     set_target_properties(liquidssh PROPERTIES
             BUILD_WITH_INSTALL_RPATH ON
+            INSTALL_RPATH "${BASE_RPATH}"
     )
 
-    # ---------------- DEBUG / dev: no bundling, no signing ----------------
-    # If single-config: CMAKE_BUILD_TYPE == Debug
-    # If multi-config: handled by genex below.
-    set_property(TARGET liquidssh APPEND PROPERTY
-            INSTALL_RPATH
-            "$<IF:$<CONFIG:Debug>,${HOMEBREW_PREFIX}/lib;${QT_HINT}/lib;@executable_path/../Frameworks;@loader_path/../Frameworks,@executable_path/../Frameworks;@loader_path/../Frameworks>"
-    )
+    # In Debug, also look in Homebrew + Qt SDK (so CLion runs from build tree)
+    if(NOT CMAKE_CONFIGURATION_TYPES) # single-config (Ninja, CLion)
+        if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+            set_target_properties(liquidssh PROPERTIES
+                    INSTALL_RPATH "${BASE_RPATH};${HOMEBREW_PREFIX}/lib;${QT_HINT}/lib"
+            )
+        endif()
+    else() # multi-config (Xcode)
+        set_target_properties(liquidssh PROPERTIES
+                INSTALL_RPATH_DEBUG "${BASE_RPATH};${HOMEBREW_PREFIX}/lib;${QT_HINT}/lib"
+        )
+    endif()
 
-    # ---------------- RELEASE / dist: bundle + macdeployqt + sign ----------------
+    # -------- Release helpers: scripts we will generate and run with cmake -P --------
+    set(_SCRIPT_DIR "${CMAKE_CURRENT_BINARY_DIR}/cmake_scripts")
+    file(MAKE_DIRECTORY "${_SCRIPT_DIR}")
 
-    # 1) Bundle libssh from Homebrew inside the app (Release only)
-    # We guard copy/fix commands with $<CONFIG:...> so they trigger only for Release/RelWithDebInfo.
+    # 1) bundle_libssh.cmake: copy Homebrew libssh into Contents/Frameworks and fix install names
+    file(WRITE "${_SCRIPT_DIR}/bundle_libssh.cmake" [=[
+    if(NOT DEFINED CFG OR (CFG STREQUAL "Debug"))
+      return()
+    endif()
+    if(NOT (CFG STREQUAL "Release" OR CFG STREQUAL "RelWithDebInfo"))
+      return()
+    endif()
+
+    if(NOT DEFINED BUNDLE_CONTENTS OR NOT DEFINED EXE OR NOT DEFINED LIBSSH_DYLIB)
+      message(FATAL_ERROR "bundle_libssh.cmake: missing args")
+    endif()
+
+    file(MAKE_DIRECTORY "${BUNDLE_CONTENTS}/Frameworks")
+    get_filename_component(_LIBSSH_BASENAME "${LIBSSH_DYLIB}" NAME)
+    file(COPY "${LIBSSH_DYLIB}" DESTINATION "${BUNDLE_CONTENTS}/Frameworks")
+    set(_BUNDLED "${BUNDLE_CONTENTS}/Frameworks/${_LIBSSH_BASENAME}")
+
+    # Set the dylib's id to @rpath/...
+    execute_process(COMMAND install_name_tool -id "@rpath/${_LIBSSH_BASENAME}" "${_BUNDLED}"
+                    RESULT_VARIABLE r1)
+    if(r1)
+      message(FATAL_ERROR "install_name_tool -id failed: ${r1}")
+    endif()
+
+    # Ensure exe has rpath to Frameworks
+    execute_process(COMMAND install_name_tool -add_rpath "@executable_path/../Frameworks" "${EXE}"
+                    RESULT_VARIABLE r2)
+    # ignore r2 nonzero if rpath exists already
+
+    # Rewrite exe's reference to Homebrew lib -> @rpath/...
+    execute_process(COMMAND install_name_tool -change "${LIBSSH_DYLIB}" "@rpath/${_LIBSSH_BASENAME}" "${EXE}"
+                    RESULT_VARIABLE r3)
+    # ignore r3 nonzero if not referenced directly (ok)
+  ]=])
+
+    # 2) macdeployqt.cmake: bundle Qt frameworks/plugins
+    file(WRITE "${_SCRIPT_DIR}/macdeployqt.cmake" [=[
+    if(NOT DEFINED CFG OR (CFG STREQUAL "Debug"))
+      return()
+    endif()
+    if(NOT (CFG STREQUAL "Release" OR CFG STREQUAL "RelWithDebInfo"))
+      return()
+    endif()
+
+    if(NOT DEFINED BUNDLE_DIR OR NOT DEFINED MACDEPLOYQT)
+      message(FATAL_ERROR "macdeployqt.cmake: missing args")
+    endif()
+
+    execute_process(COMMAND "${MACDEPLOYQT}" "${BUNDLE_DIR}" -verbose=2
+                    RESULT_VARIABLE r)
+    if(r)
+      message(FATAL_ERROR "macdeployqt failed: ${r}")
+    endif()
+  ]=])
+
+    # 3) codesign.cmake: deep ad-hoc sign the app (must be LAST)
+    file(WRITE "${_SCRIPT_DIR}/codesign.cmake" [=[
+    if(NOT DEFINED CFG OR (CFG STREQUAL "Debug"))
+      return()
+    endif()
+    if(NOT (CFG STREQUAL "Release" OR CFG STREQUAL "RelWithDebInfo"))
+      return()
+    endif()
+
+    if(NOT DEFINED BUNDLE_DIR OR NOT DEFINED CODESIGN)
+      message(FATAL_ERROR "codesign.cmake: missing args")
+    endif()
+
+    execute_process(COMMAND "${CODESIGN}" --force --deep --timestamp=none -s - "${BUNDLE_DIR}"
+                    RESULT_VARIABLE r)
+    if(r)
+      message(FATAL_ERROR "codesign failed: ${r}")
+    endif()
+  ]=])
+
+    # -------- Release: locate libssh + macdeployqt + codesign tools --------
     find_library(LIBSSH_DYLIB
             NAMES ssh libssh libssh.4
             HINTS "${HOMEBREW_PREFIX}/lib" "/usr/local/lib"
             NO_DEFAULT_PATH
     )
-    if(NOT LIBSSH_DYLIB)
-        message(STATUS "Note: libssh not found at ${HOMEBREW_PREFIX}/lib or /usr/local/lib. If you build Release, brew install libssh.")
-    endif()
+    # Not fatal here; script handles missing case gracefully (but you'll want libssh for Release)
 
-    if(LIBSSH_DYLIB)
-        add_custom_command(TARGET liquidssh POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E env CONFIG=$<CONFIG>
-                bash -lc '[ "$$CONFIG" = "Release" -o "$$CONFIG" = "RelWithDebInfo" ] || exit 0; \
-                mkdir -p "$<TARGET_BUNDLE_CONTENT_DIR:liquidssh>/Frameworks"; \
-                BASENAME="$(basename "${LIBSSH_DYLIB}")"; \
-                cp -f "${LIBSSH_DYLIB}" "$<TARGET_BUNDLE_CONTENT_DIR:liquidssh>/Frameworks/$$BASENAME"; \
-                install_name_tool -id "@rpath/$$BASENAME" "$<TARGET_BUNDLE_CONTENT_DIR:liquidssh>/Frameworks/$$BASENAME"; \
-                install_name_tool -add_rpath "@executable_path/../Frameworks" "$<TARGET_FILE:liquidssh>" || true; \
-                install_name_tool -change "${LIBSSH_DYLIB}" "@rpath/$$BASENAME" "$<TARGET_FILE:liquidssh>" || true'
-                COMMENT "Release: bundle libssh and fix install names"
-                VERBATIM
-        )
-    endif()
-
-    # 2) Bundle Qt frameworks/plugins with macdeployqt (Release only)
     find_program(MACDEPLOYQT macdeployqt
             HINTS "$ENV{Qt6_DIR}/../../../bin" "$ENV{QT_ROOT_DIR}/bin" "${QT_HINT}/bin"
-            "/Users/serbantudor04/Qt/6.9.2/macos/bin"   # <- tweak if needed
+            "/Users/serbantudor04/Qt/6.9.2/macos/bin"  # adjust if needed
     )
-    if(MACDEPLOYQT)
-        add_custom_command(TARGET liquidssh POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E env CONFIG=$<CONFIG>
-                bash -lc '[ "$$CONFIG" = "Release" -o "$$CONFIG" = "RelWithDebInfo" ] || exit 0; \
-                "${MACDEPLOYQT}" "$<TARGET_BUNDLE_DIR:liquidssh>" -verbose=2'
-                COMMENT "Release: macdeployqt for Qt frameworks/plugins"
-                VERBATIM
-        )
-    endif()
-
-    # 3) Deep ad-hoc sign the app bundle (Release only, ALWAYS last)
     find_program(CODESIGN_EXECUTABLE codesign)
-    if(CODESIGN_EXECUTABLE)
-        add_custom_command(TARGET liquidssh POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E env CONFIG=$<CONFIG>
-                bash -lc '[ "$$CONFIG" = "Release" -o "$$CONFIG" = "RelWithDebInfo" ] || exit 0; \
-                codesign --force --deep --timestamp=none -s - "$<TARGET_BUNDLE_DIR:liquidssh>"'
-                COMMENT "Release: deep ad-hoc codesign"
-                VERBATIM
-        )
-    endif()
+
+    # -------- Attach the post-build steps (Release only via CFG var) --------
+    # Bundle libssh
+    add_custom_command(TARGET liquidssh POST_BUILD
+            COMMAND "${CMAKE_COMMAND}"
+            -DCFG=$<CONFIG>
+            -DBUNDLE_CONTENTS=$<TARGET_BUNDLE_CONTENT_DIR:liquidssh>
+            -DEXE=$<TARGET_FILE:liquidssh>
+            -DLIBSSH_DYLIB=${LIBSSH_DYLIB}
+            -P "${_SCRIPT_DIR}/bundle_libssh.cmake"
+            COMMENT "Release: bundle libssh & fix install names"
+    )
+
+    # macdeployqt
+    add_custom_command(TARGET liquidssh POST_BUILD
+            COMMAND "${CMAKE_COMMAND}"
+            -DCFG=$<CONFIG>
+            -DBUNDLE_DIR=$<TARGET_BUNDLE_DIR:liquidssh>
+            -DMACDEPLOYQT=${MACDEPLOYQT}
+            -P "${_SCRIPT_DIR}/macdeployqt.cmake"
+            COMMENT "Release: macdeployqt frameworks/plugins"
+    )
+
+    # deep ad-hoc codesign (last)
+    add_custom_command(TARGET liquidssh POST_BUILD
+            COMMAND "${CMAKE_COMMAND}"
+            -DCFG=$<CONFIG>
+            -DBUNDLE_DIR=$<TARGET_BUNDLE_DIR:liquidssh>
+            -DCODESIGN=${CODESIGN_EXECUTABLE}
+            -P "${_SCRIPT_DIR}/codesign.cmake"
+            COMMENT "Release: deep ad-hoc codesign"
+    )
 endif()
