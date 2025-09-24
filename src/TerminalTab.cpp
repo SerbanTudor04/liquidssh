@@ -6,14 +6,25 @@
 #include <QInputDialog>
 #include <QResizeEvent>
 #include <QFontMetrics>
+#include <QThread>
 
-static QString currentUser() {
+static QString envUser() {
     return qEnvironmentVariable("USER",
            qEnvironmentVariable("USERNAME", "user"));
 }
 
-TerminalTab::TerminalTab(const QString& host, QWidget *parent)
-    : QWidget(parent), host_(host)
+QString TerminalTab::currentUser() { return envUser(); }
+
+QString TerminalTab::effUser() const {
+    return spec_.user.isEmpty() ? envUser() : spec_.user;
+}
+
+int TerminalTab::effPort() const {
+    return (spec_.port >= 1 && spec_.port <= 65535) ? spec_.port : 22;
+}
+
+TerminalTab::TerminalTab(const HostSpec& spec, QWidget *parent)
+    : QWidget(parent), spec_(spec)
 {
     auto *lay = new QVBoxLayout(this);
     lay->setContentsMargins(12,12,12,12);
@@ -28,20 +39,26 @@ TerminalTab::TerminalTab(const QString& host, QWidget *parent)
     connect(workerThread_, &QThread::finished, worker_, &QObject::deleteLater);
 
     connect(worker_, &SSHWorker::connected, this, &TerminalTab::onConnected);
-    connect(worker_, &SSHWorker::data, this, &TerminalTab::onData);
-    connect(worker_, &SSHWorker::closed, this, &TerminalTab::onClosed);
+    connect(worker_, &SSHWorker::data,      this, &TerminalTab::onData);
+    connect(worker_, &SSHWorker::closed,    this, &TerminalTab::onClosed);
+
     connect(worker_, &SSHWorker::error, this, [this](const QString& m){
         term_->appendRemote(("\r\n[SSH ERROR] " + m + "\r\n").toUtf8());
+
         // Fallback to password prompt on auth failure
         if (m.contains("Auth", Qt::CaseInsensitive)) {
             bool ok=false;
-            QString pw = QInputDialog::getText(this, "SSH Password",
-                QString("Password for %1@%2").arg(currentUser(), host_),
-                QLineEdit::Password, {}, &ok);
+            const QString u = effUser();
+            const QString prompt = QString("Password for %1@%2")
+                                       .arg(u, spec_.host);
+            const QString pw = QInputDialog::getText(this, tr("SSH Password"),
+                                                     prompt,
+                                                     QLineEdit::Password, {}, &ok);
             if (ok) {
-                QMetaObject::invokeMethod(worker_, [this,pw](){
-                    worker_->connectToHost(host_, 22, currentUser(),
-                                           pw, true/*use password*/, QString());
+                const int port = effPort();
+                QMetaObject::invokeMethod(worker_, [this, u, pw, port](){
+                    worker_->connectToHost(spec_.host, port, u,
+                                           pw, /*usePassword*/true, QString());
                 }, Qt::QueuedConnection);
             }
         }
@@ -51,15 +68,23 @@ TerminalTab::TerminalTab(const QString& host, QWidget *parent)
             worker_, &SSHWorker::writeData, Qt::QueuedConnection);
 
     workerThread_->start();
+
     // Initiate connection with key auth first
-    QMetaObject::invokeMethod(worker_, [this](){
-        worker_->connectToHost(host_, 22, currentUser(),
-                               QString(), false/*usePassword*/, QString());
+    const QString u = effUser();
+    const int port = effPort();
+    qDebug() << "Connecting as" << effUser() << "to" << spec_.host << ":" << effPort();
+
+    QMetaObject::invokeMethod(worker_, [this, u, port](){
+        worker_->connectToHost(spec_.host, port, u,
+                               QString(), /*usePassword*/false, QString());
     }, Qt::QueuedConnection);
 
     term_->appendRemote(QString("Connecting to %1 as %2 ...\r\n")
-                        .arg(host_, currentUser()).toUtf8());
+                        .arg(spec_.host, u).toUtf8());
 }
+
+TerminalTab::TerminalTab(const QString& host, QWidget *parent)
+    : TerminalTab(HostSpec{QString(), host, QString(), 22}, parent) {}
 
 TerminalTab::~TerminalTab() {
     if (worker_) {

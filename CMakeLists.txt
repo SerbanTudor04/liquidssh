@@ -34,6 +34,9 @@ add_executable(liquidssh
         src/CustomTabWidget.cpp     src/CustomTabWidget.h
         src/GlassCloseButton.cpp    src/GlassCloseButton.h
         src/SSHWorker.cpp           src/SSHWorker.h
+        src/NewHostDialog.cpp
+        src/NewHostDialog.h
+        src/types/SSHHost.h
         # resources/liquidssh.qrc  # add if you have one
 )
 

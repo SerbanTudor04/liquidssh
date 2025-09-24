@@ -7,12 +7,20 @@
 #include <QTabBar>
 #include <QVBoxLayout>
 #include <QPainter>
+#include <QToolButton>
 #include <qstyle.h>
 
 #include "CustomTabWidget.h"
 
 // icon helper from section 2
 static QIcon makeStatusIcon(const QColor &c, int d = 12);
+QString TabArea::labelFor(const HostSpec &s) {
+    if (!s.alias.isEmpty())
+        return QString("%1 (%2)").arg(s.alias, s.host);
+    if (!s.user.isEmpty())
+        return QString("%1@%2").arg(s.user, s.host);
+    return s.host;
+}
 
 TabArea::TabArea(QWidget *parent) : QWidget(parent) {
     setAttribute(Qt::WA_TranslucentBackground, true);
@@ -55,6 +63,32 @@ TabArea::TabArea(QWidget *parent) : QWidget(parent) {
     info = new InfoTab(this);
     int infoIndex = tabs->addTab(info, "Info");
     tabs->tabBar()->setTabButton(infoIndex, QTabBar::RightSide, nullptr);
+
+    auto *addBtn = new QToolButton(this);
+    addBtn->setText("+");
+    addBtn->setCursor(Qt::PointingHandCursor);
+    addBtn->setAutoRaise(true);
+    addBtn->setToolTip(tr("New Host…"));
+    addBtn->setFixedHeight(28);
+    addBtn->setStyleSheet(R"(
+      QToolButton {
+        color: #ECECEC;
+        padding: 0 10px;
+        border-radius: 14px;
+        background: rgba(255,255,255,0.12);
+      }
+      QToolButton:hover { background: rgba(255,255,255,0.18); }
+      QToolButton:pressed { background: rgba(255,255,255,0.24); }
+    )");
+    tabs->setCornerWidget(addBtn, Qt::TopRightCorner);
+    connect(addBtn, &QToolButton::clicked, this, &TabArea::openNewHostDialog);
+
+    // Shortcut: Cmd/Ctrl+T (Qt maps StandardKey on each platform)
+    auto *newHostAct = new QAction(tr("New Host…"), this);
+    newHostAct->setShortcut(QKeySequence::AddTab); // usually Cmd/Ctrl+T
+    addAction(newHostAct);
+    connect(newHostAct, &QAction::triggered, this, &TabArea::openNewHostDialog);
+
 
     auto *lay = new QVBoxLayout(this);
     lay->setSpacing(0);
@@ -118,3 +152,25 @@ static QIcon makeStatusIcon(const QColor &c, int d) {
     p.drawEllipse(QRectF(1,1,d-4,d-4));
     return QIcon(px);
 }
+
+
+void TabArea::openNewHostDialog() {
+    NewHostDialog dlg(this);
+    if (dlg.exec() != QDialog::Accepted) return;
+    const HostSpec s = dlg.spec();
+    emit hostAdded(s);     // <-- tell Sidebar
+    openHost(s);           // open/focus the tab
+}
+void TabArea::openHost(const HostSpec &spec) {
+    const QString lbl = labelFor(spec);
+
+    if (int idx = findTabByText(lbl); idx >= 0) {
+        tabs->setCurrentIndex(idx);
+        return;
+    }
+    auto *term = new TerminalTab(spec, this);  // <— use spec here
+    const int newIndex = tabs->addTab(term, lbl);
+    tabs->setCurrentIndex(newIndex);
+}
+
+

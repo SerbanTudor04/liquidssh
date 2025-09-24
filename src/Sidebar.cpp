@@ -2,6 +2,33 @@
 #include <QListWidget>
 #include <QVBoxLayout>
 #include <QItemSelectionModel>
+
+static constexpr int kSpecRole = Qt::UserRole + 1;
+
+QString Sidebar::labelFor(const HostSpec &s) {
+    if (!s.alias.isEmpty()) return QString("%1 (%2)").arg(s.alias, s.host);
+    if (!s.user.isEmpty())  return QString("%1@%2").arg(s.user, s.host);
+    return s.host;
+}
+
+int Sidebar::findItem(const QString &label) const {
+    for (int i = 0; i < list->count(); ++i)
+        if (list->item(i)->text() == label) return i;
+    return -1;
+}
+
+void Sidebar::addHost(const HostSpec &spec) {
+    const QString lbl = labelFor(spec);
+    if (int idx = findItem(lbl); idx >= 0) {
+        list->setCurrentRow(idx);
+        return;
+    }
+    auto *it = new QListWidgetItem(lbl);
+    it->setData(kSpecRole, QVariant::fromValue(spec));
+    list->addItem(it);
+    list->setCurrentItem(it);
+}
+
 Sidebar::Sidebar(QWidget *parent) : QWidget(parent) {
     list = new QListWidget(this);
     list->addItem("prod-db (10.0.0.5)");
@@ -38,8 +65,10 @@ Sidebar::Sidebar(QWidget *parent) : QWidget(parent) {
         emit hostSelected(it->text());
     });
 
-    // Double click → open session tab
     connect(list, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem *it){
-        emit hostDoubleClicked(it->text());
+        const QVariant v = it->data(kSpecRole);
+        if (v.isValid() && v.canConvert<HostSpec>())
+            emit hostActivated(v.value<HostSpec>());
+        emit hostDoubleClicked(it->text()); // keep old signal if you still use it
     });
 }
