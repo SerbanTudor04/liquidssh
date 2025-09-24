@@ -17,8 +17,8 @@ if(APPLE)
 endif()
 
 # ---------------- Qt ----------------
-find_package(QT NAMES Qt6 REQUIRED COMPONENTS Widgets)
-find_package(Qt6 REQUIRED COMPONENTS Widgets)
+find_package(QT NAMES Qt6 REQUIRED COMPONENTS Widgets Sql)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Sql)
 
 # ---------------- Sources ----------------
 add_executable(liquidssh
@@ -34,10 +34,9 @@ add_executable(liquidssh
         src/CustomTabWidget.cpp     src/CustomTabWidget.h
         src/GlassCloseButton.cpp    src/GlassCloseButton.h
         src/SSHWorker.cpp           src/SSHWorker.h
-        src/NewHostDialog.cpp
-        src/NewHostDialog.h
+        src/NewHostDialog.cpp        src/NewHostDialog.h
         src/types/SSHHost.h
-        # resources/liquidssh.qrc  # add if you have one
+        src/store/HostsStore.cpp        src/store/HostsStore.h
 )
 
 # Platform-specific glass
@@ -54,6 +53,7 @@ endif()
 
 # Qt link + includes
 target_link_libraries(liquidssh PRIVATE Qt6::Widgets)
+target_link_libraries(liquidssh PRIVATE Qt6::Sql)
 target_include_directories(liquidssh PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 # ---------------- libssh via pkg-config (macOS/Linux) ----------------

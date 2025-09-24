@@ -7,8 +7,11 @@
 #include <QMenuBar>
 
 #include <QMouseEvent>
+#include <QSqlDatabase>
 #include <QWindow>
 #include <QTimer>
+
+#include "store/HostsStore.h"
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -21,11 +24,14 @@ MainWindow::MainWindow(QWidget *parent)
     setAttribute(Qt::WA_TranslucentBackground, true);
     setStyleSheet("QMainWindow { background: transparent; }");
 #endif
-
+    qDebug() << QSqlDatabase::drivers();
     // Sidebar + tabs
     auto *sidebar = new Sidebar(this);   // <-- make sure Sidebar.cpp sets widget + viewport transparent
     auto *tabs    = new TabArea(this);   // <-- TabArea.cpp should make QTabWidget::pane transparent
-
+    auto *store = new HostsStore(this);
+    store->open();
+    for (const auto &h : store->loadAll())
+        sidebar->addHost(h);
     // Central splitter (single stylesheet call; previous multiple calls were overwriting)
     auto *splitter = new QSplitter(this);
     splitter->addWidget(sidebar);
