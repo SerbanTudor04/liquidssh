@@ -1,4 +1,5 @@
 #pragma once
+#include <qtextlayout.h>
 #include <QWidget>
 
 #include "types/SSHHost.h"

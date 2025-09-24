@@ -25,18 +25,29 @@ add_executable(liquidssh
         src/main.cpp
         src/MainWindow.cpp          src/MainWindow.h
         src/Glass.h
-        src/Sidebar.cpp             src/Sidebar.h
-        src/InfoTab.cpp             src/InfoTab.h
-        src/TabArea.cpp             src/TabArea.h
-        src/TerminalTab.cpp         src/TerminalTab.h
-        src/TerminalView.cpp        src/TerminalView.h
-        src/CustomTabBar.cpp        src/CustomTabBar.h
-        src/CustomTabWidget.cpp     src/CustomTabWidget.h
-        src/GlassCloseButton.cpp    src/GlassCloseButton.h
-        src/SSHWorker.cpp           src/SSHWorker.h
-        src/NewHostDialog.cpp        src/NewHostDialog.h
+        src/Sidebar.cpp             
+        src/Sidebar.h
+        src/InfoTab.cpp             
+        src/InfoTab.h
+        src/TabArea.cpp             
+        src/TabArea.h
+        src/TerminalTab.cpp         
+        src/TerminalTab.h
+        src/TerminalView.cpp        
+        src/TerminalView.h
+        src/CustomTabBar.cpp        
+        src/CustomTabBar.h
+        src/CustomTabWidget.cpp     
+        src/CustomTabWidget.h
+        src/GlassCloseButton.cpp    
+        src/GlassCloseButton.h
+        src/SSHWorker.cpp           
+        src/SSHWorker.h
+        src/NewHostDialog.cpp        
+        src/NewHostDialog.h
         src/types/SSHHost.h
-        src/store/HostsStore.cpp        src/store/HostsStore.h
+        src/store/HostsStore.cpp        
+        src/store/HostsStore.h
 )
 
 # Platform-specific glass

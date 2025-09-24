@@ -7,6 +7,9 @@
 #include <QResizeEvent>
 #include <QFontMetrics>
 #include <QThread>
+#include <QTimer>
+#include <QPointer>
+#include <QObject>
 
 static QString envUser() {
     return qEnvironmentVariable("USER",
@@ -107,17 +110,13 @@ void TerminalTab::resizeEvent(QResizeEvent* e) {
     QWidget::resizeEvent(e);
     if (!worker_) return;
     int c=120, r=32; computeColsRows(term_, c, r);
-    QMetaObject::invokeMethod(worker_, [=](){
-        worker_->setPtySize(c, r);
-    }, Qt::QueuedConnection);
+    QMetaObject::invokeMethod(worker_, [=, this](){ worker_->setPtySize(c, r); }, Qt::QueuedConnection);
 }
 
 void TerminalTab::onConnected() {
     term_->appendRemote("[SSH] Connected. Starting shell...\r\n");
     int cols=120, rows=32; computeColsRows(term_, cols, rows);
-    QMetaObject::invokeMethod(worker_, [=](){
-        worker_->setPtySize(cols, rows);
-    }, Qt::QueuedConnection);
+    QMetaObject::invokeMethod(worker_, [=, this](){ worker_->setPtySize(cols, rows); }, Qt::QueuedConnection);
 }
 
 void TerminalTab::onData(const QByteArray& b) {
@@ -126,4 +125,70 @@ void TerminalTab::onData(const QByteArray& b) {
 
 void TerminalTab::onClosed() {
     term_->appendRemote("\r\n[SSH] Connection closed.\r\n");
+}
+
+void TerminalTab::shutdownSessionAsync(std::function<void()> done) {
+    if (shuttingDown_) { // already in progress
+        QMetaObject::invokeMethod(this, [d = std::move(done)]{ if (d) d(); }, Qt::QueuedConnection);
+        return;
+    }
+    shuttingDown_ = true;
+
+    // 1) Stop sending user input to a dying backend
+    if (term_ && worker_) {
+        QObject::disconnect(term_, &TerminalView::sendBytes, worker_, nullptr);
+    }
+
+    // 2) Disconnect all signals from worker -> this widget to prevent use-after-free
+    if (worker_) {
+        QObject::disconnect(worker_, nullptr, this, nullptr);
+    }
+
+    // We’ll still need one last notification that the worker closed,
+    // so wire a *temporary* one-shot connection:
+    QPointer<TerminalTab> self(this);
+    auto finish = [this, self, done = std::move(done)]() mutable {
+        if (!self) return;
+
+        // Ensure we don't process more worker signals
+        if (worker_) QObject::disconnect(worker_, nullptr, this, nullptr);
+
+        // 3) Stop the thread cleanly
+        if (workerThread_) {
+            workerThread_->quit();
+            workerThread_->wait(1500);
+        }
+
+        // 4) Delete worker & thread objects on GUI thread
+        if (worker_)       { worker_->deleteLater();       worker_ = nullptr; }
+        if (workerThread_) { workerThread_->deleteLater(); workerThread_ = nullptr; }
+
+        shuttingDown_ = false;
+        if (done) done();
+    };
+
+    if (worker_) {
+        // One-shot finish on normal close
+        QObject::connect(
+            worker_, &SSHWorker::closed,
+            this,
+            [finish]() mutable { finish(); },
+            Qt::SingleShotConnection
+        );
+
+        // 2a) Ask backend to stop
+        QMetaObject::invokeMethod(worker_, "disconnectFromHost", Qt::QueuedConnection);
+        // (Optional) If your SSHWorker supports a soft stop: emit requestStop();
+        // QMetaObject::invokeMethod(worker_, "stop", Qt::QueuedConnection);
+    }
+
+    // 2b) Safety net: force finish if the worker doesn’t close in time
+    QTimer::singleShot(2000, this, [this, finish = std::move(finish)]() mutable {
+        if (!worker_) { finish(); return; }
+        QMetaObject::invokeMethod(worker_, "forceClose", Qt::QueuedConnection);
+        QTimer::singleShot(300, this, [this, finish = std::move(finish)]() mutable {
+            finish();
+        });
+    });
+
 }

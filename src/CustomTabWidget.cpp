@@ -2,6 +2,9 @@
 #include "CustomTabWidget.h"
 #include "CustomTabBar.h"
 #include <QWidget>
+#include <QPointer>
+
+#include "TerminalTab.h"
 
 CustomTabWidget::CustomTabWidget(QWidget *parent)
     : QTabWidget(parent)
@@ -18,10 +21,19 @@ CustomTabWidget::CustomTabWidget(QWidget *parent)
 
 void CustomTabWidget::onTabCloseRequested(int index)
 {
-    if (index == 0)
-        return;
+    if (index == 0) return;
 
-    QWidget *w = widget(index);   // page widget
-    removeTab(index);             // detach from tab widget
-    if (w) w->deleteLater();      // free it (or keep it if you manage elsewhere)
+    QWidget *w = widget(index);
+    if (auto term = qobject_cast<TerminalTab*>(w)) {
+        QPointer<TerminalTab> guard = term;
+        term->shutdownSessionAsync([this, index, guard]() {
+            if (!guard) return; // already deleted
+            removeTab(index);
+            guard->deleteLater();
+        });
+        return;
+    }
+
+    removeTab(index);
+    if (w) w->deleteLater();
 }

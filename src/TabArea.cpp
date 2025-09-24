@@ -1,7 +1,7 @@
+#include "TabArea.h"
 #include "CustomTabBar.h"
 #include "InfoTab.h"
 #include "TerminalTab.h"
-
 #include <QPainter>
 #include <QTabBar>
 #include <QTabWidget>

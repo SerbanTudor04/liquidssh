@@ -30,10 +30,8 @@ void Sidebar::addHost(const HostSpec &spec) {
 }
 
 Sidebar::Sidebar(QWidget *parent) : QWidget(parent) {
+
     list = new QListWidget(this);
-    list->addItem("prod-db (10.0.0.5)");
-    list->addItem("edge-01 (edge01.example.com)");
-    list->addItem("dev-mac (192.168.1.23)");
 
     list->setSelectionMode(QAbstractItemView::SingleSelection);
     list->setSelectionBehavior(QAbstractItemView::SelectItems);
