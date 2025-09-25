@@ -64,3 +64,13 @@ HostSpec NewHostDialog::spec() const {
     s.port  = portSpin->value();
     return s;
 }
+
+
+void NewHostDialog::setSpec(const HostSpec& s) {
+    // prefill fields
+    aliasEdit->setText(s.alias);
+    userEdit->setText(s.user);
+    hostEdit->setText(s.host);
+    portSpin->setValue(s.port > 0 ? s.port : 22);
+    // any key path/auth fields as well
+}

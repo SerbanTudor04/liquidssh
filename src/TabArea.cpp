@@ -64,24 +64,24 @@ TabArea::TabArea(QWidget *parent) : QWidget(parent) {
   int infoIndex = tabs->addTab(info, "Info");
   tabs->tabBar()->setTabButton(infoIndex, QTabBar::RightSide, nullptr);
 
-  auto *addBtn = new QToolButton(this);
-  addBtn->setText("+");
-  addBtn->setCursor(Qt::PointingHandCursor);
-  addBtn->setAutoRaise(true);
-  addBtn->setToolTip(tr("New Host…"));
-  addBtn->setFixedHeight(28);
-  addBtn->setStyleSheet(R"(
-      QToolButton {
-        color: #ECECEC;
-        padding: 0 10px;
-        border-radius: 14px;
-        background: rgba(255,255,255,0.12);
-      }
-      QToolButton:hover { background: rgba(255,255,255,0.18); }
-      QToolButton:pressed { background: rgba(255,255,255,0.24); }
-    )");
-  tabs->setCornerWidget(addBtn, Qt::TopRightCorner);
-  connect(addBtn, &QToolButton::clicked, this, &TabArea::openNewHostDialog);
+  // auto *addBtn = new QToolButton(this);
+  // addBtn->setText("+");
+  // addBtn->setCursor(Qt::PointingHandCursor);
+  // addBtn->setAutoRaise(true);
+  // addBtn->setToolTip(tr("New Host…"));
+  // addBtn->setFixedHeight(28);
+  // addBtn->setStyleSheet(R"(
+  //     QToolButton {
+  //       color: #ECECEC;
+  //       padding: 0 10px;
+  //       border-radius: 14px;
+  //       background: rgba(255,255,255,0.12);
+  //     }
+  //     QToolButton:hover { background: rgba(255,255,255,0.18); }
+  //     QToolButton:pressed { background: rgba(255,255,255,0.24); }
+  //   )");
+  // tabs->setCornerWidget(addBtn, Qt::TopRightCorner);
+  // connect(addBtn, &QToolButton::clicked, this, &TabArea::openNewHostDialog);
 
   // Shortcut: Cmd/Ctrl+T (Qt maps StandardKey on each platform)
   auto *newHostAct = new QAction(tr("New Host…"), this);

@@ -14,7 +14,7 @@ class NewHostDialog : public QDialog {
 public:
     explicit NewHostDialog(QWidget *parent = nullptr);
     HostSpec spec() const;
-
+    void setSpec(const HostSpec& s);
 private slots:
     void validate();
 
