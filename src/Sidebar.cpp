@@ -46,14 +46,14 @@ Sidebar::Sidebar(QWidget *parent) : QWidget(parent) {
     addLink->setCursor(Qt::PointingHandCursor);
     addLink->setFlat(true);
     addLink->setFocusPolicy(Qt::NoFocus);
-    addLink->setStyleSheet(R"(
-        QPushButton {
-            background: transparent; border: none; color: white; text-decoration: underline;
-            padding: 0; margin: 0; font-size: 13px; font-weight: 500;
-        }
-        QPushButton:hover { color: #E6E6E6; }
-        QPushButton:pressed { color: #CFCFCF; }
-    )");
+    // addLink->setStyleSheet(R"(
+    //     QPushButton {
+    //         background: transparent; border: none; color: white; text-decoration: underline;
+    //         padding: 0; margin: 0; font-size: 13px; font-weight: 500;
+    //     }
+    //     QPushButton:hover { color: #E6E6E6; }
+    //     QPushButton:pressed { color: #CFCFCF; }
+    // )");
     connect(addLink, &QPushButton::clicked, this, &Sidebar::onAddClicked);
 
     auto *header = new QWidget(this);
@@ -67,17 +67,7 @@ Sidebar::Sidebar(QWidget *parent) : QWidget(parent) {
     search = new QLineEdit(this);
     search->setPlaceholderText(tr("Search hosts…"));
     search->setClearButtonEnabled(true);
-    search->setStyleSheet(R"(
-        QLineEdit {
-            background: rgba(255,255,255,0.12);
-            border: 1px solid rgba(255,255,255,0.18);
-            border-radius: 14px;
-            padding: 8px 10px;
-            color: white;
-            selection-background-color: rgba(255,255,255,0.35);
-        }
-        QLineEdit:focus { border: 1px solid rgba(255,255,255,0.35); background: rgba(255,255,255,0.18); }
-    )");
+
 
     // --- List
     list = new QListWidget(this);
