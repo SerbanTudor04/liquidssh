@@ -11,6 +11,8 @@
 TerminalView::TerminalView(QWidget *parent) : QPlainTextEdit(parent) {
     setReadOnly(true);
     setUndoRedoEnabled(false);
+    setFocusPolicy(Qt::StrongFocus);
+    setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
 
     QFont f = QFontDatabase::systemFont(QFontDatabase::FixedFont);
     f.setPointSizeF(12);
@@ -20,6 +22,7 @@ TerminalView::TerminalView(QWidget *parent) : QPlainTextEdit(parent) {
     setBackgroundVisible(false);
     setFrameStyle(QFrame::NoFrame);
     document()->setMaximumBlockCount(5000);
+
 }
 
 void TerminalView::appendRemote(const QByteArray& data) {

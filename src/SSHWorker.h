@@ -21,7 +21,11 @@ public slots:
     void setPtySize(int cols, int rows);
     void disconnectFromHost();
 
-    signals:
+    void stop();
+
+    void forceClose();
+
+signals:
         void connected();
     void data(const QByteArray& bytes);
     void error(const QString& msg);

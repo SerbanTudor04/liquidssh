@@ -59,6 +59,7 @@ MainWindow::MainWindow(QWidget *parent)
             Qt::UniqueConnection);
     connect(tabs,    &TabArea::hostAdded,    sidebar,   &Sidebar::addHost);
     connect(sidebar,    &Sidebar::hostActivated,tabs,   qOverload<const HostSpec&>(&TabArea::openHost));
+
     // Install the vibrancy AFTER the window is realized to avoid timing issues
 #ifdef Q_OS_MAC
     QTimer::singleShot(0, this, [this]{

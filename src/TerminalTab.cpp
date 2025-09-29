@@ -70,8 +70,12 @@ TerminalTab::TerminalTab(const HostSpec& spec, QWidget *parent)
     });
 
     connect(term_, &TerminalView::sendBytes,
-            worker_, &SSHWorker::writeData, Qt::QueuedConnection);
-
+            worker_, &SSHWorker::writeData,
+            Qt::QueuedConnection);
+    connect(term_, &TerminalView::sendBytes, this, [this](const QByteArray& b){
+        qDebug() << "[typed]" << b;
+        term_->appendRemote(b); // local echo, just for debugging
+    });
     workerThread_->start();
 
     // Initiate connection with key auth first
@@ -119,7 +123,8 @@ void TerminalTab::onConnected() {
     term_->clearScreen();
     term_->appendRemote("[SSH] Connected. Starting shell...\r\n");
     term_->clearScreen();
-
+    term_->setFocus();
+    term_->setFocusPolicy(Qt::StrongFocus);
     int cols=120, rows=32; computeColsRows(term_, cols, rows);
     QMetaObject::invokeMethod(worker_, [=, this](){ worker_->setPtySize(cols, rows); }, Qt::QueuedConnection);
 }

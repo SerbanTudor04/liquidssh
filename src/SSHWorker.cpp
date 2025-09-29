@@ -100,3 +100,12 @@ void SSHWorker::disconnectFromHost() {
         session_ = nullptr;
     }
 }
+
+void SSHWorker::stop() {
+    disconnectFromHost();
+}
+
+
+void SSHWorker::forceClose() {
+    disconnectFromHost();
+}
