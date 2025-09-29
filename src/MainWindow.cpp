@@ -28,9 +28,8 @@ MainWindow::MainWindow(QWidget *parent)
     // Sidebar + tabs
     auto *sidebar = new Sidebar(this);   // <-- make sure Sidebar.cpp sets widget + viewport transparent
     auto *tabs    = new TabArea(this);   // <-- TabArea.cpp should make QTabWidget::pane transparent
-    auto *store = new HostsStore(this);
-    store->open();
-    for (const auto &h : store->loadAll())
+    HostsStore::instance().open();
+    for (const auto &h : HostsStore::instance().loadAll())
         sidebar->addHost(h);
     // Central splitter (single stylesheet call; previous multiple calls were overwriting)
     auto *splitter = new QSplitter(this);
