@@ -85,8 +85,8 @@ Sidebar::Sidebar(QWidget *parent) : QWidget(parent) {
     list->setStyleSheet(R"(
       QListWidget { background: transparent; border: none; }
       QListWidget::item { background: transparent; border-radius: 18px; margin: 6px; padding: 10px 14px; color: white; }
-      QListWidget::item:hover   { background: rgba(255,255,255,0.12); }
-      QListWidget::item:selected{ background: rgba(255,255,255,0.35); color: black; }
+      QListWidget::item:hover   { background: rgba(255,255,255,0.12);color: white;  }
+      QListWidget::item:selected{ background: rgba(255,255,255,0.15); color: cyan; }
     )");
 
     // --- Layout
