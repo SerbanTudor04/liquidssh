@@ -11,6 +11,7 @@ public:
 
 public slots:
     void appendRemote(const QByteArray& data);
+    void clearScreen();
 
 protected:
     void keyPressEvent(QKeyEvent *e) override;

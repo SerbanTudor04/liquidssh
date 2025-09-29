@@ -31,6 +31,13 @@ void TerminalView::appendRemote(const QByteArray& data) {
     ensureCursorVisible();
 }
 
+void TerminalView::clearScreen(){
+    document()->clear();
+    auto c  = textCursor();
+    c.movePosition(QTextCursor::StartOfBlock);
+    setTextCursor(c);
+}
+
 QByteArray TerminalView::ansiStrip(const QByteArray& in) const {
     static QRegularExpression re("\x1B\\[[0-9;?]*[ -/]*[@-~]");
     QString t = QString::fromUtf8(in);

@@ -60,6 +60,8 @@ TerminalTab::TerminalTab(const HostSpec& spec, QWidget *parent)
             if (ok) {
                 const int port = effPort();
                 QMetaObject::invokeMethod(worker_, [this, u, pw, port](){
+                    term_->clearScreen();
+
                     worker_->connectToHost(spec_.host, port, u,
                                            pw, /*usePassword*/true, QString());
                 }, Qt::QueuedConnection);
@@ -114,7 +116,10 @@ void TerminalTab::resizeEvent(QResizeEvent* e) {
 }
 
 void TerminalTab::onConnected() {
+    term_->clearScreen();
     term_->appendRemote("[SSH] Connected. Starting shell...\r\n");
+    term_->clearScreen();
+
     int cols=120, rows=32; computeColsRows(term_, cols, rows);
     QMetaObject::invokeMethod(worker_, [=, this](){ worker_->setPtySize(cols, rows); }, Qt::QueuedConnection);
 }
