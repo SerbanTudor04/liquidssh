@@ -10,6 +10,8 @@
 #include <QMessageBox>
 #include <QPushButton>
 
+#include "store/HostsStore.h"
+
 QString Sidebar::labelFor(const HostSpec &s) {
     if (!s.alias.isEmpty()) return QString("%1 (%2)").arg(s.alias, s.host);
     if (!s.user.isEmpty())  return QString("%1@%2").arg(s.user, s.host);
@@ -25,10 +27,14 @@ int Sidebar::findItem(const QString &label) const {
 void Sidebar::addHost(const HostSpec &spec) {
     const QString lbl = labelFor(spec);
     if (int idx = findItem(lbl); idx >= 0) { list->setCurrentRow(idx); return; }
+    HostsStore::instance().saveHost(spec);
     auto *it = new QListWidgetItem(lbl);
     it->setData(kSpecRole, QVariant::fromValue(spec));
     list->addItem(it);
     list->setCurrentItem(it);
+
+
+
 }
 
 Sidebar::Sidebar(QWidget *parent) : QWidget(parent) {
@@ -231,6 +237,7 @@ void Sidebar::onListContextMenuRequested(const QPoint& pos) {
         if (reply == QMessageBox::Yes) {
             emit hostRemoved(spec);
             delete list->takeItem(list->row(it));
+            HostsStore::instance().removeHost(spec);
         }
     }
 }
